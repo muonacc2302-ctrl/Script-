@@ -1,0 +1,156 @@
+--// Capri Menu - Aimbot 200m (Leg Part) Version
+local Players, RunService, CoreGui, Camera, LocalPlayer = game:GetService("Players"), game:GetService("RunService"), game:GetService("CoreGui"), workspace.CurrentCamera, game:GetService("Players").LocalPlayer
+if CoreGui:FindFirstChild("CapriMenuGui") then CoreGui.CapriMenuGui:Destroy() end
+
+getgenv().Capri = {KA = false, AB = false, ESP = false, FOV = 150, Target = nil, PlayerTimers = {}}
+
+--// GUI Setup
+local GUI = Instance.new("ScreenGui", CoreGui)
+GUI.Name, GUI.ResetOnSpawn = "CapriMenuGui", false
+
+local Toggle = Instance.new("ImageButton", GUI)
+Toggle.Size, Toggle.Position, Toggle.BackgroundColor3, Toggle.Draggable, Toggle.Active = UDim2.new(0, 55, 0, 55), UDim2.new(0.02, 0, 0.15, 0), Color3.fromRGB(30, 30, 30), true, true
+Instance.new("UICorner", Toggle).CornerRadius = UDim.new(1, 0)
+
+local Main = Instance.new("Frame", GUI)
+Main.Size, Main.Position, Main.BackgroundColor3, Main.Visible, Main.Draggable, Main.Active = UDim2.new(0, 240, 0, 280), UDim2.new(0.02, 0, 0.24, 0), Color3.fromRGB(20, 20, 25), false, true, true
+Main.BorderColor3, Main.BorderSizePixel = Color3.fromRGB(0, 255, 128), 2
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
+
+local Title = Instance.new("TextLabel", Main)
+Title.Size, Title.BackgroundColor3, Title.Text, Title.TextColor3, Title.Font, Title.TextSize = UDim2.new(1, 0, 0, 40), Color3.fromRGB(35, 35, 45), "CAPRI MENU", Color3.fromRGB(0, 255, 128), Enum.Font.SourceSansBold, 18
+Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 10)
+
+local function addBtn(name, y, key)
+    local b = Instance.new("TextButton", Main)
+    b.Size, b.Position, b.BackgroundColor3, b.Text, b.TextColor3, b.Font, b.TextSize = UDim2.new(0, 200, 0, 35), UDim2.new(0.08, 0, y, 0), Color3.fromRGB(45, 45, 55), name .. ": OFF", Color3.fromRGB(255, 50, 50), Enum.Font.SourceSansSemibold, 14
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+    b.MouseButton1Click:Connect(function()
+        getgenv().Capri[key] = not getgenv().Capri[key]
+        local s = getgenv().Capri[key]
+        b.Text, b.TextColor3, b.BackgroundColor3 = name .. (s and ": ON" or ": OFF"), s and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50), s and Color3.fromRGB(20, 60, 20) or Color3.fromRGB(45, 45, 55)
+    end)
+end
+
+addBtn("Kill Aura (OneShot)", 0.18, "KA")
+addBtn("Aimbot Leg (200m)", 0.38, "AB")
+addBtn("ESP Player", 0.58, "ESP")
+
+local isOpen = false
+Toggle.MouseButton1Click:Connect(function()
+    isOpen = not isOpen
+    Main.Visible = isOpen
+    Toggle.BackgroundColor3 = isOpen and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(30, 30, 30)
+end)
+
+--// Visuals & Logic
+local FOV = Drawing.new("Circle")
+FOV.Visible, FOV.Radius, FOV.Filled, FOV.Color, FOV.Thickness, FOV.Transparency = false, getgenv().Capri.FOV, false, Color3.fromRGB(0, 255, 128), 1, 0.7
+
+-- Hàm tìm phần chân của nhân vật
+local function getLegPart(char)
+    return char:FindFirstChild("LeftLowerLeg") or char:FindFirstChild("RightLowerLeg") or char:FindFirstChild("LeftLeg") or char:FindFirstChild("RightLeg") or char:FindFirstChild("HumanoidRootPart")
+end
+
+local function getTarget(maxDist)
+    local target, shortest = nil, getgenv().Capri.FOV
+    local center, myRoot = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2), LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            local legPart = getLegPart(p.Character)
+            if hum and hum.Health > 0 and legPart and (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude <= maxDist then
+                local pos, onScreen = Camera:WorldToViewportPoint(legPart.Position)
+                if onScreen then
+                    local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                    if dist < shortest then shortest, target = dist, p end
+                end
+            end
+        end
+    end
+    return target
+end
+
+local esp = {}
+RunService.RenderStepped:Connect(function()
+    local C = getgenv().Capri
+    FOV.Visible, FOV.Position = C.AB, Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+    -- Aimbot (200m, ngắm vào chân)
+    if C.AB then
+        local target = getTarget(200)
+        if target and target.Character then
+            local legPart = getLegPart(target.Character)
+            if legPart then
+                local legPos = legPart.Position
+                LocalPlayer.Character:SetPrimaryPartCFrame(CFrame.new(LocalPlayer.Character.PrimaryPart.Position, Vector3.new(legPos.X, LocalPlayer.Character.PrimaryPart.Position.Y, legPos.Z)))
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, legPos)
+            end
+        end
+    end
+
+    -- Kill Aura (OneShot NPC tức thì, Player delay 1 giây)
+    if C.KA then
+        pcall(function()
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if root then
+                for _, obj in ipairs(workspace:GetDescendants()) do
+                    if obj:IsA("Model") and obj ~= char then
+                        local hum, hrp = obj:FindFirstChildOfClass("Humanoid"), obj:FindFirstChild("HumanoidRootPart")
+                        if hum and hrp and hum.Health > 0 and (root.Position - hrp.Position).Magnitude <= 30 then
+                            local isPlayer = Players:GetPlayerFromCharacter(obj) ~= nil
+                            if not isPlayer then
+                                hum.Health = 0
+                            else
+                                local pName = obj.Name
+                                if not C.PlayerTimers[pName] then
+                                    C.PlayerTimers[pName] = tick()
+                                elseif tick() - C.PlayerTimers[pName] >= 1.0 then
+                                    hum:TakeDamage(50)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    else
+        C.PlayerTimers = {}
+    end
+
+    -- ESP Render
+    if C.ESP then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local hum, hrp = p.Character:FindFirstChildOfClass("Humanoid"), p.Character.HumanoidRootPart
+                if hum and hum.Health > 0 then
+                    if not esp[p] then
+                        local b, n, l = Drawing.new("Square"), Drawing.new("Text"), Drawing.new("Line")
+                        b.Color, b.Thickness, b.Filled = Color3.fromRGB(0, 255, 128), 1.5, false
+                        n.Color, n.Size, n.Center, n.Outline = Color3.fromRGB(255, 255, 255), 14, true, true
+                        l.Color, l.Thickness, l.Transparency = Color3.fromRGB(0, 255, 128), 1, 0.7
+                        esp[p] = {box = b, name = n, line = l}
+                    end
+                    local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+                    if onScreen then
+                        local size = Vector2.new(2500 / pos.Z, 3500 / pos.Z)
+                        esp[p].box.Size, esp[p].box.Position, esp[p].box.Visible = size, Vector2.new(pos.X - size.X / 2, pos.Y - size.Y / 2), true
+                        esp[p].name.Text, esp[p].name.Position, esp[p].name.Visible = p.Name .. " [" .. math.floor(hum.Health) .. " HP]", Vector2.new(pos.X, pos.Y - size.Y / 2 - 20), true
+                        esp[p].line.From, esp[p].line.To, esp[p].line.Visible = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y), Vector2.new(pos.X, pos.Y), true
+                    else
+                        esp[p].box.Visible, esp[p].name.Visible, esp[p].line.Visible = false, false, false
+                    end
+                elseif esp[p] then
+                    esp[p].box:Remove() esp[p].name:Remove() esp[p].line:Remove() esp[p] = nil
+                end
+            elseif esp[p] then
+                esp[p].box:Remove() esp[p].name:Remove() esp[p].line:Remove() esp[p] = nil
+            end
+        end
+    else
+        for _, e in pairs(esp) do e.box:Remove() e.name:Remove() e.line:Remove() end
+        esp = {}
+    end
+end)
