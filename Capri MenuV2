@@ -1,4 +1,4 @@
---// Capri Menu - Aimbot 200m (Leg Part) Version
+--// Capri Menu - Fixed Kill Aura (3,387,500 Damage / 2s) & Aimbot 400m
 local Players, RunService, CoreGui, Camera, LocalPlayer = game:GetService("Players"), game:GetService("RunService"), game:GetService("CoreGui"), workspace.CurrentCamera, game:GetService("Players").LocalPlayer
 if CoreGui:FindFirstChild("CapriMenuGui") then CoreGui.CapriMenuGui:Destroy() end
 
@@ -32,8 +32,8 @@ local function addBtn(name, y, key)
     end)
 end
 
-addBtn("Kill Aura (OneShot)", 0.18, "KA")
-addBtn("Aimbot Leg (200m)", 0.38, "AB")
+addBtn("Kill Aura (3.387M / 2s)", 0.18, "KA")
+addBtn("Aimbot Leg (400m)", 0.38, "AB")
 addBtn("ESP Player", 0.58, "ESP")
 
 local isOpen = false
@@ -47,7 +47,6 @@ end)
 local FOV = Drawing.new("Circle")
 FOV.Visible, FOV.Radius, FOV.Filled, FOV.Color, FOV.Thickness, FOV.Transparency = false, getgenv().Capri.FOV, false, Color3.fromRGB(0, 255, 128), 1, 0.7
 
--- Hàm tìm phần chân của nhân vật
 local function getLegPart(char)
     return char:FindFirstChild("LeftLowerLeg") or char:FindFirstChild("RightLowerLeg") or char:FindFirstChild("LeftLeg") or char:FindFirstChild("RightLeg") or char:FindFirstChild("HumanoidRootPart")
 end
@@ -72,14 +71,16 @@ local function getTarget(maxDist)
     return target
 end
 
+local lastAuraTick = 0
+
 local esp = {}
 RunService.RenderStepped:Connect(function()
     local C = getgenv().Capri
     FOV.Visible, FOV.Position = C.AB, Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
-    -- Aimbot (200m, ngắm vào chân)
+    -- Aimbot (400m, ngắm vào chân)
     if C.AB then
-        local target = getTarget(200)
+        local target = getTarget(400)
         if target and target.Character then
             local legPart = getLegPart(target.Character)
             if legPart then
@@ -90,32 +91,38 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Kill Aura (OneShot NPC tức thì, Player delay 1 giây)
+    -- Kill Aura: Gây chính xác 3.387.500 sát thương mỗi 2 giây
     if C.KA then
-        pcall(function()
-            local char = LocalPlayer.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            if root then
-                for _, obj in ipairs(workspace:GetDescendants()) do
-                    if obj:IsA("Model") and obj ~= char then
-                        local hum, hrp = obj:FindFirstChildOfClass("Humanoid"), obj:FindFirstChild("HumanoidRootPart")
-                        if hum and hrp and hum.Health > 0 and (root.Position - hrp.Position).Magnitude <= 30 then
-                            local isPlayer = Players:GetPlayerFromCharacter(obj) ~= nil
-                            if not isPlayer then
-                                hum.Health = 0
-                            else
-                                local pName = obj.Name
-                                if not C.PlayerTimers[pName] then
-                                    C.PlayerTimers[pName] = tick()
-                                elseif tick() - C.PlayerTimers[pName] >= 1.0 then
-                                    hum:TakeDamage(50)
+        if tick() - lastAuraTick >= 2.0 then
+            lastAuraTick = tick()
+            pcall(function()
+                local char = LocalPlayer.Character
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local searchFolder = workspace:FindFirstChild("Enemies") or workspace
+                    for _, obj in ipairs(searchFolder:GetDescendants()) do
+                        if obj:IsA("Model") and obj ~= char then
+                            local hum, hrp = obj:FindFirstChildOfClass("Humanoid"), obj:FindFirstChild("HumanoidRootPart")
+                            if hum and hrp and hum.Health > 0 and (root.Position - hrp.Position).Magnitude <= 100 then
+                                local isPlayer = Players:GetPlayerFromCharacter(obj) ~= nil
+                                if not isPlayer then
+                                    -- Đã cập nhật chính xác 3.387.500 sát thương
+                                    hum:TakeDamage(3387500)
+                                else
+                                    local pName = obj.Name
+                                    if not C.PlayerTimers[pName] then
+                                        C.PlayerTimers[pName] = tick()
+                                    elseif tick() - C.PlayerTimers[pName] >= 1.0 then
+                                        hum:TakeDamage(50)
+                                        C.PlayerTimers[pName] = tick()
+                                    end
                                 end
                             end
                         end
                     end
                 end
-            end
-        end)
+            end)
+        end
     else
         C.PlayerTimers = {}
     end
