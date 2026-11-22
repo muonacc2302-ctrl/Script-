@@ -1,0 +1,113 @@
+--[[ Darkwen Shield · Cap 1: Custom Bytecode VM Co Ban ]]--
+(function(...)
+local _b32=bit32
+local _bx,_lr,_rs,_ba
+if _b32 and _b32.bxor and _b32.lrotate and _b32.rshift and _b32.band then
+_bx,_lr,_rs,_ba=_b32.bxor,_b32.lrotate,_b32.rshift,_b32.band
+else
+_bx=function(x,y) x=math.floor(x%4294967296) y=math.floor(y%4294967296) local r,m=0,1 for _=1,32 do if (x%2)~=(y%2) then r=r+m end x=math.floor(x/2) y=math.floor(y/2) m=m*2 end return r end
+_ba=function(x,y) x=math.floor(x%4294967296) y=math.floor(y%4294967296) local r,m=0,1 for _=1,32 do if (x%2)==1 and (y%2)==1 then r=r+m end x=math.floor(x/2) y=math.floor(y/2) m=m*2 end return r end
+_rs=function(x,n) return math.floor((x%4294967296)/(2^(n%32))) end
+_lr=function(x,n) x=x%4294967296 local k=n%32 if k==0 then return x end return ((x*(2^k))%4294967296)+math.floor(x/(2^(32-k))) end
+end
+local _ENV_TBL=(getfenv and getfenv(0)) or _G
+local _UP=table.unpack or unpack
+local function _cap(...) return {...},select("#",...) end
+local _Ml10Ol1O_bc5f={} for i=1,64 do _Ml10Ol1O_bc5f[string.byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",i)]=i-1 end
+local _EI1II1OI_569b=table.concat({"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"})
+local _raw,_p,_n={},1,#_EI1II1OI_569b
+while _p<=_n do
+local a=_Ml10Ol1O_bc5f[string.byte(_EI1II1OI_569b,_p)] or 0
+local b=_Ml10Ol1O_bc5f[string.byte(_EI1II1OI_569b,_p+1)] or 0
+local c3=string.byte(_EI1II1OI_569b,_p+2) local c4=string.byte(_EI1II1OI_569b,_p+3)
+local c=_Ml10Ol1O_bc5f[c3] or 0 local d=_Ml10Ol1O_bc5f[c4] or 0
+local v=a*262144+b*4096+c*64+d
+_raw[#_raw+1]=math.floor(v/65536)%256
+if c3~=61 then _raw[#_raw+1]=math.floor(v/256)%256 end
+if c4~=61 then _raw[#_raw+1]=v%256 end
+_p=_p+4
+end
+local _SlI1OI1I_79a8=1804649449
+for i=1,#_raw do
+_SlI1OI1I_79a8=(_SlI1OI1I_79a8*69069+1)%4294967296
+local _k=_ba(_bx(_bx(_rs(_SlI1OI1I_79a8,16),_rs(_SlI1OI1I_79a8,8)),(i-1)*13),255)
+_raw[i]=_bx(_raw[i],_k)
+end
+local _rp=1
+local function _ru() local r,sh=0,1 while true do local b=_raw[_rp] _rp=_rp+1 r=r+(b%128)*sh if b<128 then return r end sh=sh*128 end end
+local function _rsg() local v=_ru() if v%2==0 then return v/2 else return -((v+1)/2) end end
+local _mi=math.tointeger local function _rf() local b1,b2,b3,b4,b5,b6,b7,b8=_raw[_rp],_raw[_rp+1],_raw[_rp+2],_raw[_rp+3],_raw[_rp+4],_raw[_rp+5],_raw[_rp+6],_raw[_rp+7] _rp=_rp+8 local sg=b1>=128 local ex=((b1%128)*16)+math.floor(b2/16) local mn=((((((b2%16)*256.0+b3)*256.0+b4)*256.0+b5)*256.0+b6)*256.0+b7)*256.0+b8 if ex==2047 then if mn==0 then return sg and -math.huge or math.huge end return 0/0 end if ex==0 then if mn==0 then return 0 end return (sg and -1.0 or 1.0)*(mn*(2.0^-1074)) end local _v=(sg and -1.0 or 1.0)*((mn+4503599627370496.0)*(2.0^(ex-1075))) if _mi then local _iv=_mi(_v) if _iv then return _iv end end return _v end
+local function _rstr() local l=_ru() if l==0 then return "" end local t={} for i=1,l do t[i]=string.char(_raw[_rp+i-1]) end _rp=_rp+l return table.concat(t) end
+local function _readProto()
+local np=_ru() local va=(_raw[_rp]==1) _rp=_rp+1
+local nkn=_ru() local kn={} for i=1,nkn do kn[i]=_rf() end
+local nks=_ru() local ks={} for i=1,nks do ks[i]=_rstr() end
+local nuv=_ru() local uv={} for i=1,nuv do local s=_raw[_rp] _rp=_rp+1 uv[i]={s=s,i=_ru()} end
+local nc=_ru() local c={} for i=1,nc do c[i]={_ru(),_rsg(),_rsg(),_rsg()} end
+local np2=_ru() local ps={} for i=1,np2 do ps[i]=_readProto() end
+return {np=np,va=va,kn=kn,ks=ks,u=uv,c=c,p=ps}
+end
+local _root=_readProto()
+local function _runProto(pr,U,...)
+local R={} local KN=pr.kn local KS=pr.ks local _C=pr.c local _P=pr.p
+local _va,_van={...},select("#",...)
+for i=1,pr.np do R[i]=_va[i] end
+local _vx,_vxn={},0 if pr.va and _van>pr.np then _vxn=_van-pr.np for i=1,_vxn do _vx[i]=_va[pr.np+i] end end
+local _M,_Mn={},0 local _pc=1 local _ins,_op,_a,_b,_c
+while true do
+_ins=_C[_pc] if not _ins then break end
+_pc=_pc+1 _op=_ins[1] _a=_ins[2] _b=_ins[3] _c=_ins[4]
+if _op==1 then for _r=_a,_b do R[_r]=nil end
+elseif _op==2 then R[_a]=(_b~=0)
+elseif _op==3 then R[_a]=KN[_b]
+elseif _op==4 then R[_a]=KS[_b]
+elseif _op==5 then R[_a]=R[_b]
+elseif _op==6 then if _c==1 then R[_a]={R[_b]} else R[_a]={nil} end
+elseif _op==7 then R[_a]=R[_b][1]
+elseif _op==8 then R[_a][1]=R[_b]
+elseif _op==9 then R[_a]=U[_b][1]
+elseif _op==10 then U[_a][1]=R[_b]
+elseif _op==11 then R[_a]=_ENV_TBL[KS[_b]]
+elseif _op==12 then _ENV_TBL[KS[_b]]=R[_a]
+elseif _op==13 then R[_a]={}
+elseif _op==14 then R[_a]=R[_b][R[_c]]
+elseif _op==15 then R[_a][R[_b]]=R[_c]
+elseif _op==16 then R[_a]=R[_b][KS[_c]]
+elseif _op==17 then R[_a][KS[_b]]=R[_c]
+elseif _op==18 then local _ix=_b%65536 local _bb=math.floor(_b/65536) for _k=0,_c-1 do R[_a][_ix+_k]=R[_bb+_k] end
+elseif _op==19 then local _ix=_b%65536 local _bb=math.floor(_b/65536) for _k=0,_c-1 do R[_a][_ix+_k]=R[_bb+_k] end for _k=1,_Mn do R[_a][_ix+_c+_k-1]=_M[_k] end
+elseif _op==20 then local _o=R[_b] R[_a+1]=_o R[_a]=_o[KS[_c]]
+elseif _op==21 then R[_a]=R[_b]+R[_c]
+elseif _op==22 then R[_a]=R[_b]-R[_c]
+elseif _op==23 then R[_a]=R[_b]*R[_c]
+elseif _op==24 then R[_a]=R[_b]/R[_c]
+elseif _op==25 then R[_a]=math.floor(R[_b]/R[_c])
+elseif _op==26 then R[_a]=R[_b]%R[_c]
+elseif _op==27 then R[_a]=R[_b]^R[_c]
+elseif _op==28 then R[_a]=R[_b]..R[_c]
+elseif _op==29 then R[_a]=-R[_b]
+elseif _op==30 then R[_a]=(not R[_b])
+elseif _op==31 then R[_a]=#R[_b]
+elseif _op==32 then R[_a]=(R[_b]==R[_c])
+elseif _op==33 then R[_a]=(R[_b]~=R[_c])
+elseif _op==34 then R[_a]=(R[_b]<R[_c])
+elseif _op==35 then R[_a]=(R[_b]<=R[_c])
+elseif _op==36 then R[_a]=(R[_b]>R[_c])
+elseif _op==37 then R[_a]=(R[_b]>=R[_c])
+elseif _op==38 then _pc=_pc+_b
+elseif _op==39 then if R[_a] then _pc=_pc+_b end
+elseif _op==40 then if not R[_a] then _pc=_pc+_b end
+elseif _op==41 then local _rs,_rn=_cap(R[_a](_UP(R,_a+1,_a+_b))) if _c==0 then _M=_rs _Mn=_rn R[_a]=_rs[1] else local _nd=_c-1 for _k=1,_nd do R[_a+_k-1]=_rs[_k] end end
+elseif _op==42 then local _ag={} for _k=1,_b do _ag[_k]=R[_a+_k] end for _k=1,_Mn do _ag[_b+_k]=_M[_k] end local _rs,_rn=_cap(R[_a](_UP(_ag,1,_b+_Mn))) if _c==0 then _M=_rs _Mn=_rn R[_a]=_rs[1] else local _nd=_c-1 for _k=1,_nd do R[_a+_k-1]=_rs[_k] end end
+elseif _op==43 then if _b==0 then return elseif _b==1 then return R[_a] else return _UP(R,_a,_a+_b-1) end
+elseif _op==44 then local _ot={} for _k=1,_b do _ot[_k]=R[_a+_k-1] end for _k=1,_Mn do _ot[_b+_k]=_M[_k] end return _UP(_ot,1,_b+_Mn)
+elseif _op==45 then local _cp=_P[_b] local _cu={} for _k=1,#_cp.u do local _ud=_cp.u[_k] if _ud.s==1 then _cu[_k]=R[_ud.i] else _cu[_k]=U[_ud.i] end end R[_a]=function(...) return _runProto(_cp,_cu,...) end
+elseif _op==46 then if _c==1 then _M=_vx _Mn=_vxn R[_a]=_vx[1] else for _k=1,_b do R[_a+_k-1]=_vx[_k] end end
+elseif _op==47 then R[_a]=R[_a]-R[_a+2] _pc=_pc+_b
+elseif _op==48 then local _stp=R[_a+2] local _nx=R[_a]+_stp R[_a]=_nx if (_stp>0 and _nx<=R[_a+1]) or (_stp<=0 and _nx>=R[_a+1]) then _pc=_pc+_b end
+elseif _op==49 then if type(R[_a])=="table" and R[_a+1]==nil then local _mt=getmetatable and getmetatable(R[_a]) if _mt and type(_mt.__iter)=="function" then R[_a],R[_a+1],R[_a+2]=_mt.__iter(R[_a]) else R[_a+1]=R[_a] R[_a]=next end end local _tr,_tn=_cap(R[_a](R[_a+1],R[_a+2])) if _tr[1]~=nil then R[_a+2]=_tr[1] for _k=1,_c do R[_a+2+_k]=_tr[_k] end _pc=_pc+_b end
+else break end
+end
+end
+return _runProto(_root,{},...)
+end)(...)
