@@ -12,10 +12,6 @@ local ContentProvider = game:GetService("ContentProvider")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
-local World1 = game.PlaceId == 2753915549 or game.PlaceId == 85211729168715
-local World2 = game.PlaceId == 4442272183 or game.PlaceId == 79091703265657
-local World3 = game.PlaceId == 7449423635 or game.PlaceId == 100117331123089
-
 local CONFIG_FILE = "CapriHub_Combat_V4.json"
 local PREV_FILE = "Capri_Combat_V4.json"
 local LEGACY_FILE = "CapriMenuSettings.json"
@@ -71,8 +67,6 @@ local Defaults = {
     FastAttackPlayer = false,
     GunM1Mobs = false,
     GunM1Player = false,
-    FruitM1Mobs = false,
-    FruitM1Player = false,
     AutoV4 = false,
     Theme = "Dark",
 
@@ -132,6 +126,7 @@ local Defaults = {
     RJR_ESP_HPColor = "FF5555",
 
     -- Vị trí mặc định các nút nổi
+    MenuToggleBtnPos = { 0.04, 0, 0.22, 0 },
     CamBtnPos = { 0.88, 0, 0.45, 0 },
     AimBtnPos = { 0.88, 0, 0.32, 0 },
     JumpBtnPos = { 0.88, 0, 0.58, 0 },
@@ -185,6 +180,12 @@ local function createCircleBtn(name, text, posScale, textColor, textSize)
     return btn
 end
 
+-- Nút mở/đóng menu riêng cho Mobile (luôn hiển thị và không bị khóa kéo thả)
+local MenuToggleBtn = createCircleBtn("CapriMenuToggleBtn", "MENU", Defaults.MenuToggleBtnPos, Color3.fromRGB(0, 255, 170), 9)
+MenuToggleBtn.Visible = true
+MenuToggleBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MenuToggleBtn.BackgroundTransparency = 0.25
+
 local CamBtn = createCircleBtn("CapriLockBtn", "LOCK", Defaults.CamBtnPos, Color3.new(1, 1, 1), 10)
 local AimBtn = createCircleBtn("CapriAimBtn", "AIM", Defaults.AimBtnPos, Color3.new(1, 1, 1), 10)
 local JumpBtn = createCircleBtn("CapriJumpBtn", "JUMP", Defaults.JumpBtnPos, Color3.new(1, 1, 1), 10)
@@ -209,6 +210,7 @@ Instance.new("UICorner", ZoneDragButton).CornerRadius = UDim.new(1, 0)
 
 local function applySavedButtonPositions(data)
     if type(data) ~= "table" then return end
+    if type(data.MenuToggleBtnPos) == "table" then MenuToggleBtn.Position = UDim2.new(unpack(data.MenuToggleBtnPos)) end
     if type(data.CamBtnPos) == "table" then CamBtn.Position = UDim2.new(unpack(data.CamBtnPos)) end
     if type(data.AimBtnPos) == "table" then AimBtn.Position = UDim2.new(unpack(data.AimBtnPos)) end
     if type(data.JumpBtnPos) == "table" then JumpBtn.Position = UDim2.new(unpack(data.JumpBtnPos)) end
@@ -222,6 +224,7 @@ local function CollectConfig()
     for key in pairs(Defaults) do
         data[key] = _G[key]
     end
+    data.MenuToggleBtnPos = { MenuToggleBtn.Position.X.Scale, MenuToggleBtn.Position.X.Offset, MenuToggleBtn.Position.Y.Scale, MenuToggleBtn.Position.Y.Offset }
     data.CamBtnPos = { CamBtn.Position.X.Scale, CamBtn.Position.X.Offset, CamBtn.Position.Y.Scale, CamBtn.Position.Y.Offset }
     data.AimBtnPos = { AimBtn.Position.X.Scale, AimBtn.Position.X.Offset, AimBtn.Position.Y.Scale, AimBtn.Position.Y.Offset }
     data.JumpBtnPos = { JumpBtn.Position.X.Scale, JumpBtn.Position.X.Offset, JumpBtn.Position.Y.Scale, JumpBtn.Position.Y.Offset }
@@ -267,6 +270,7 @@ LoadConfig()
 
 -- Đồng bộ hiển thị ban đầu của các nút nổi
 local function refreshFloatingVisibility()
+    MenuToggleBtn.Visible = true
     CamBtn.Visible = _G.CamLock_Player or _G.CamLock_Active
     AimBtn.Visible = _G.SilentAim_Player or _G.Aim_Active
     AimBtn.BackgroundColor3 = _G.SilentAim_Player and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(40, 40, 40)
@@ -390,28 +394,41 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
-local function drag(gui)
-    local d, s, sp
+local function drag(gui, ignoreLock)
+    local d, s, sp, moved
     gui.InputBegan:Connect(function(i)
-        if not _G.LockButtons and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then
+        if (ignoreLock or not _G.LockButtons) and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then
             d = true
+            moved = false
             s = i.Position
             sp = gui.Position
         end
     end)
     gui.InputChanged:Connect(function(i)
-        if not _G.LockButtons and d and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+        if (ignoreLock or not _G.LockButtons) and d and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
             local delta = i.Position - s
+            if delta.Magnitude > 6 then
+                moved = true
+            end
             gui.Position = UDim2.new(sp.X.Scale, sp.X.Offset + delta.X, sp.Y.Scale, sp.Y.Offset + delta.Y)
         end
     end)
     gui.InputEnded:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
             d = false
+            if moved then
+                task.delay(0.05, function()
+                    moved = false
+                end)
+            end
         end
     end)
+    return function()
+        return moved
+    end
 end
 
+local isMenuBtnDragged = drag(MenuToggleBtn, true)
 drag(CamBtn)
 drag(AimBtn)
 drag(JumpBtn)
@@ -435,6 +452,34 @@ local Window = WindUI:CreateWindow({
     HideSearchBar = true,
     ToggleKey = Enum.KeyCode.G,
 })
+
+local menuVisible = true
+local function setMenuVisible(state)
+    menuVisible = state
+    local ok = false
+    if Window then
+        if state and type(Window.Open) == "function" then
+            ok = pcall(function() Window:Open() end)
+        elseif (not state) and type(Window.Close) == "function" then
+            ok = pcall(function() Window:Close() end)
+        end
+        if not ok and type(Window.Toggle) == "function" then
+            pcall(function() Window:Toggle() end)
+        end
+        if Window.UIFrame then
+            pcall(function() Window.UIFrame.Visible = state end)
+        end
+        if Window.Frame then
+            pcall(function() Window.Frame.Visible = state end)
+        end
+    end
+    MenuToggleBtn.BackgroundColor3 = state and Color3.fromRGB(0, 180, 120) or Color3.fromRGB(25, 25, 30)
+end
+
+MenuToggleBtn.MouseButton1Click:Connect(function()
+    if isMenuBtnDragged and isMenuBtnDragged() then return end
+    setMenuVisible(not menuVisible)
+end)
 
 local MainTab = Window:Tab({ Title = "Main" })
 local PvpTab = Window:Tab({ Title = "PVP" })
@@ -923,152 +968,6 @@ do
         Title = "M1 Gun Player",
         Value = _G.GunM1Player,
         Callback = Bind("GunM1Player"),
-    })
-end
-
--- ==========================================
--- 2B. FRUIT M1 MOBS & FRUIT M1 PLAYER
--- ==========================================
-do
-    local FRUIT_RANGE = 350
-
-    local function isFruitTool(tool)
-        if not tool or not tool:IsA("Tool") then return false end
-        if tool.ToolTip == "Blox Fruit" or tool.ToolTip == "Fruit" then
-            return true
-        end
-        local nameLower = string.lower(tool.Name)
-        if string.find(nameLower, "fruit", 1, true) then
-            return true
-        end
-        if LocalPlayer:FindFirstChild("Data") and LocalPlayer.Data:FindFirstChild("DevilFruit") then
-            local dfName = tostring(LocalPlayer.Data.DevilFruit.Value or "")
-            if dfName ~= "" and dfName ~= "None" and string.find(string.lower(tool.Name), string.lower(dfName), 1, true) then
-                return true
-            end
-        end
-        return false
-    end
-
-    local function getClosestFruitMob()
-        local char = LocalPlayer.Character
-        local myHRP = char and char:FindFirstChild("HumanoidRootPart")
-        local enemies = Workspace:FindFirstChild("Enemies")
-        if not myHRP or not enemies then return nil end
-
-        local best, bestDist = nil, FRUIT_RANGE
-        for _, enemy in ipairs(enemies:GetChildren()) do
-            if not Players:GetPlayerFromCharacter(enemy) then
-                local eRoot = enemy:FindFirstChild("HumanoidRootPart")
-                local eHum = enemy:FindFirstChildOfClass("Humanoid")
-                if eRoot and eHum and eHum.Health > 0 then
-                    local d = (eRoot.Position - myHRP.Position).Magnitude
-                    if d < bestDist then
-                        bestDist = d
-                        best = enemy:FindFirstChild("Head") or eRoot
-                    end
-                end
-            end
-        end
-        return best
-    end
-
-    local function getClosestFruitPlayer()
-        local char = LocalPlayer.Character
-        local myHRP = char and char:FindFirstChild("HumanoidRootPart")
-        if not myHRP then return nil end
-
-        local lockedTarget = getgenv().Capri and getgenv().Capri.CurrentTarget
-        if lockedTarget and lockedTarget.Parent then
-            local ownerModel = lockedTarget:FindFirstAncestorOfClass("Model")
-            local plr = ownerModel and Players:GetPlayerFromCharacter(ownerModel)
-            local hum = ownerModel and ownerModel:FindFirstChildOfClass("Humanoid")
-            if plr and plr ~= LocalPlayer and hum and hum.Health > 0 then
-                if (lockedTarget.Position - myHRP.Position).Magnitude <= FRUIT_RANGE then
-                    return ownerModel:FindFirstChild("Head") or lockedTarget
-                end
-            end
-        end
-
-        local best, bestDist = nil, FRUIT_RANGE
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer and plr.Character then
-                local pChar = plr.Character
-                local pRoot = pChar:FindFirstChild("HumanoidRootPart")
-                local pHum = pChar:FindFirstChildOfClass("Humanoid")
-                if pRoot and pHum and pHum.Health > 0 then
-                    local d = (pRoot.Position - myHRP.Position).Magnitude
-                    if d < bestDist then
-                        bestDist = d
-                        best = pChar:FindFirstChild("Head") or pRoot
-                    end
-                end
-            end
-        end
-        return best
-    end
-
-    local function triggerFruitM1(tool, targetPart)
-        if not tool or not targetPart then return end
-        local predPos = targetPart.Position + ((targetPart.AssemblyLinearVelocity or targetPart.Velocity or Vector3.zero) * (_G.PredictionStrength or 0.165))
-        _G.SilentAimTargetPos = predPos
-
-        local leftClickRemote = tool:FindFirstChild("LeftClickRemote")
-        if leftClickRemote and leftClickRemote:IsA("RemoteEvent") then
-            pcall(function()
-                local dir = (predPos - Camera.CFrame.Position).Unit
-                leftClickRemote:FireServer(dir, 1)
-            end)
-        end
-
-        pcall(function()
-            tool:Activate()
-        end)
-
-        pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:Button1Down(Vector2.new(1280, 672), Camera.CFrame)
-            task.wait(0.02)
-            VirtualUser:Button1Up(Vector2.new(1280, 672), Camera.CFrame)
-        end)
-    end
-
-    task.spawn(function()
-        while task.wait(0.08) do
-            if not (_G.FruitM1Mobs or _G.FruitM1Player) then
-                continue
-            end
-
-            local char = LocalPlayer.Character
-            local tool = char and char:FindFirstChildOfClass("Tool")
-            if not isFruitTool(tool) then
-                continue
-            end
-
-            local targetPart = nil
-            if _G.FruitM1Player then
-                targetPart = getClosestFruitPlayer()
-            end
-            if not targetPart and _G.FruitM1Mobs then
-                targetPart = getClosestFruitMob()
-            end
-
-            if targetPart then
-                triggerFruitM1(tool, targetPart)
-            end
-        end
-    end)
-
-    uiControls.FruitM1Mobs = MainTab:Toggle({
-        Title = "Fruit M1 Mobs",
-        Value = _G.FruitM1Mobs,
-        Callback = Bind("FruitM1Mobs"),
-    })
-
-    uiControls.FruitM1Player = MainTab:Toggle({
-        Title = "Fruit M1 Player",
-        Value = _G.FruitM1Player,
-        Callback = Bind("FruitM1Player"),
     })
 end
 
@@ -2063,7 +1962,7 @@ if typeof(hookmetamethod) == "function" and typeof(getnamecallmethod) == "functi
         local args = { ... }
 
         local target = getgenv().Capri and getgenv().Capri.CurrentTarget
-        if not checkcaller() and (method == "FireServer" or method == "InvokeServer") and target and (_G.SilentAim_Player or _G.SilentAim_NPC or _G.FruitM1Mobs or _G.FruitM1Player) then
+        if not checkcaller() and (method == "FireServer" or method == "InvokeServer") and target and (_G.SilentAim_Player or _G.SilentAim_NPC) then
             local pred = target.Position + (target.Velocity * _G.PredictionStrength)
             for i, v in pairs(args) do
                 if typeof(v) == "Vector3" then
