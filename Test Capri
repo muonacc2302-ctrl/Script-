@@ -115,22 +115,20 @@ local CapriDefaults = {
     AutoFleeHP = 30,
     RaidChip = "Flame",
 
-    -- PVP & Aimbot
+    -- PVP
     Speed_Active = false,
     WalkSpeedValue = 35,
     HB = false,
-    CamLock_Player = false,
-    SilentAim_Player = false,
-    SilentAimPlayerRange = 700,
     Jump_Active = false,
     V4_Active = false,
     SuperDash_Active = false,
 
-    -- Tab Player
+    -- Player & Aimbot
     SelectedAimPlayer = "",
     AimSelectedPlayer_Active = false,
-
-    -- Cài đặt Aimbot (2 chế độ: Zone / 360°)
+    CamLock_Player = false,
+    SilentAim_Player = false,
+    SilentAimPlayerRange = 700,
     AimbotMode = "Zone",
     AimbotRadius = 250,
 
@@ -1017,7 +1015,7 @@ do
 end
 
 -- ==========================================
--- PVP TAB: SPEED, HB, FLOATING BUTTONS & AIMBOT SETTINGS
+-- PVP TAB: SPEED, HB, FLOATING BUTTONS
 -- ==========================================
 do
     uiControls.Speed_Active = Tabs.PvP:Toggle({
@@ -1032,59 +1030,13 @@ do
     })
     uiControls.WalkSpeedValue = Tabs.PvP:Slider({ Title = "Tốc độ chạy", Step = 1, Value = { Min = 16, Max = 150, Default = _G.WalkSpeedValue }, Callback = Bind("WalkSpeedValue") })
     uiControls.HB = Tabs.PvP:Toggle({ Title = "Mở rộng Hitbox", Value = _G.HB, Callback = Bind("HB") })
-    uiControls.CamLock_Player = Tabs.PvP:Toggle({ Title = "Khóa camera người chơi", Value = _G.CamLock_Player, Callback = Bind("CamLock_Player", function(v) CamBtn.Visible = v or _G.CamLock_Active end) })
-    uiControls.SilentAim_Player = Tabs.PvP:Toggle({
-        Title = "Aim ẩn người chơi",
-        Value = _G.SilentAim_Player,
-        Callback = Bind("SilentAim_Player", function(v)
-            _G.Aim_Active = isAnyPlayerAimEnabled()
-            setUI("Aim_Active", _G.Aim_Active)
-            refreshFloatingVisibility()
-        end),
-    })
-    uiControls.SilentAimPlayerRange = Tabs.PvP:Slider({
-        Title = "Tầm xa Aim mục tiêu",
-        Step = 1,
-        Value = {
-            Min = 0,
-            Max = 1000,
-            Default = math.clamp(tonumber(_G.SilentAimPlayerRange) or 700, 0, 1000),
-        },
-        Callback = Bind("SilentAimPlayerRange", function(v)
-            _G.SilentAimPlayerRange = math.clamp(tonumber(v) or 0, 0, 1000)
-        end),
-    })
     uiControls.Jump_Active = Tabs.PvP:Toggle({ Title = "Nút nhảy cao", Value = _G.Jump_Active, Callback = Bind("Jump_Active", function(v) JumpBtn.Visible = v end) })
     uiControls.V4_Active = Tabs.PvP:Toggle({ Title = "Nút bật V4", Value = _G.V4_Active, Callback = Bind("V4_Active", function(v) V4Btn.Visible = v end) })
     uiControls.SuperDash_Active = Tabs.PvP:Toggle({ Title = "Nút lướt siêu xa", Value = _G.SuperDash_Active, Callback = Bind("SuperDash_Active", function(v) DashBtn.Visible = v end) })
-
-    local AimSec = Tabs.PvP:Section({ Title = "Cài đặt Aimbot" })
-    uiControls.AimbotMode = AimSec:Dropdown({
-        Title = "Chế độ Aimbot",
-        Values = { "Zone", "360°" },
-        Value = (_G.AimbotMode == "360°" or _G.Aim360) and "360°" or "Zone",
-        Callback = Bind("AimbotMode", function(v)
-            applyAimbotMode(v)
-        end),
-    })
-    uiControls.AimbotRadius = AimSec:Slider({
-        Title = "Bán kính vòng tròn (Zone)",
-        Step = 1,
-        Value = {
-            Min = 20,
-            Max = 800,
-            Default = getCircleRadius(),
-        },
-        Callback = Bind("AimbotRadius", function(v)
-            local r = math.clamp(tonumber(v) or 250, 20, 800)
-            _G.AimbotRadius = r
-            _G.FOV = r
-        end),
-    })
 end
 
 -- ==========================================
--- PLAYER TAB: CHỌN PLAYER, LÀM MỚI PLAYER, AIM PLAYER
+-- PLAYER TAB: CHỌN PLAYER, LÀM MỚI PLAYER, AIM PLAYER, AIM ẨN PLAYER, KHÓA CAMERA PLAYER, CHỈNH TẦM AIM, AIM SETTING
 -- ==========================================
 do
     local aimPlayerDrop = Tabs.Player:Dropdown({
@@ -1121,6 +1073,61 @@ do
             _G.Aim_Active = isAnyPlayerAimEnabled()
             setUI("Aim_Active", _G.Aim_Active)
             refreshFloatingVisibility()
+        end),
+    })
+
+    uiControls.SilentAim_Player = Tabs.Player:Toggle({
+        Title = "Aim ẩn người chơi",
+        Value = _G.SilentAim_Player,
+        Callback = Bind("SilentAim_Player", function(v)
+            _G.Aim_Active = isAnyPlayerAimEnabled()
+            setUI("Aim_Active", _G.Aim_Active)
+            refreshFloatingVisibility()
+        end),
+    })
+
+    uiControls.CamLock_Player = Tabs.Player:Toggle({
+        Title = "Khóa camera người chơi",
+        Value = _G.CamLock_Player,
+        Callback = Bind("CamLock_Player", function(v)
+            CamBtn.Visible = v or _G.CamLock_Active
+        end),
+    })
+
+    uiControls.SilentAimPlayerRange = Tabs.Player:Slider({
+        Title = "Tầm xa Aim mục tiêu",
+        Step = 1,
+        Value = {
+            Min = 0,
+            Max = 1000,
+            Default = math.clamp(tonumber(_G.SilentAimPlayerRange) or 700, 0, 1000),
+        },
+        Callback = Bind("SilentAimPlayerRange", function(v)
+            _G.SilentAimPlayerRange = math.clamp(tonumber(v) or 0, 0, 1000)
+        end),
+    })
+
+    local AimSec = Tabs.Player:Section({ Title = "Cài đặt Aimbot" })
+    uiControls.AimbotMode = AimSec:Dropdown({
+        Title = "Chế độ Aimbot",
+        Values = { "Zone", "360°" },
+        Value = (_G.AimbotMode == "360°" or _G.Aim360) and "360°" or "Zone",
+        Callback = Bind("AimbotMode", function(v)
+            applyAimbotMode(v)
+        end),
+    })
+    uiControls.AimbotRadius = AimSec:Slider({
+        Title = "Bán kính vòng tròn (Zone)",
+        Step = 1,
+        Value = {
+            Min = 20,
+            Max = 800,
+            Default = getCircleRadius(),
+        },
+        Callback = Bind("AimbotRadius", function(v)
+            local r = math.clamp(tonumber(v) or 250, 20, 800)
+            _G.AimbotRadius = r
+            _G.FOV = r
         end),
     })
 end
