@@ -126,6 +126,7 @@ local CapriDefaults = {
     -- Player & Aimbot
     SelectedAimPlayer = "",
     AimSelectedPlayer_Active = false,
+    AimMode = "Gần nhất", -- "Gần nhất" | "Tự aim"
     CamLock_Player = false,
     SilentAim_Player = false,
     SilentAimPlayerRange = 700,
@@ -1036,7 +1037,7 @@ do
 end
 
 -- ==========================================
--- PLAYER TAB: CHỌN PLAYER, LÀM MỚI PLAYER, AIM PLAYER, AIM ẨN PLAYER, KHÓA CAMERA PLAYER, CHỈNH TẦM AIM, AIM SETTING
+-- PLAYER TAB: CHỌN PLAYER, LÀM MỚI PLAYER, AIM PLAYER, CHẾ ĐỘ AIM & SETTING AIM
 -- ==========================================
 do
     local aimPlayerDrop = Tabs.Player:Dropdown({
@@ -1076,6 +1077,15 @@ do
         end),
     })
 
+    uiControls.AimMode = Tabs.Player:Dropdown({
+        Title = "Chế độ aim",
+        Values = { "Gần nhất", "Tự aim" },
+        Value = (_G.AimMode == "Tự aim") and "Tự aim" or "Gần nhất",
+        Callback = Bind("AimMode", function(v)
+            _G.AimMode = (v == "Tự aim") and "Tự aim" or "Gần nhất"
+        end),
+    })
+
     uiControls.SilentAim_Player = Tabs.Player:Toggle({
         Title = "Aim ẩn người chơi",
         Value = _G.SilentAim_Player,
@@ -1094,7 +1104,9 @@ do
         end),
     })
 
-    uiControls.SilentAimPlayerRange = Tabs.Player:Slider({
+    local AimSettingSec = Tabs.Player:Section({ Title = "Setting aim" })
+
+    uiControls.SilentAimPlayerRange = AimSettingSec:Slider({
         Title = "Tầm xa Aim mục tiêu",
         Step = 1,
         Value = {
@@ -1107,8 +1119,33 @@ do
         end),
     })
 
-    local AimSec = Tabs.Player:Section({ Title = "Cài đặt Aimbot" })
-    uiControls.AimbotMode = AimSec:Dropdown({
+    uiControls.Smoothness = AimSettingSec:Slider({
+        Title = "Độ mượt khóa camera",
+        Step = 0.01,
+        Value = {
+            Min = 0.01,
+            Max = 1,
+            Default = math.clamp(tonumber(_G.Smoothness) or 0.15, 0.01, 1),
+        },
+        Callback = Bind("Smoothness", function(v)
+            _G.Smoothness = math.clamp(tonumber(v) or 0.15, 0.01, 1)
+        end),
+    })
+
+    uiControls.PredictionStrength = AimSettingSec:Slider({
+        Title = "Lực dự đoán (Prediction)",
+        Step = 0.005,
+        Value = {
+            Min = 0,
+            Max = 0.5,
+            Default = math.clamp(tonumber(_G.PredictionStrength) or 0.165, 0, 0.5),
+        },
+        Callback = Bind("PredictionStrength", function(v)
+            _G.PredictionStrength = math.clamp(tonumber(v) or 0.165, 0, 0.5)
+        end),
+    })
+
+    uiControls.AimbotMode = AimSettingSec:Dropdown({
         Title = "Chế độ Aimbot",
         Values = { "Zone", "360°" },
         Value = (_G.AimbotMode == "360°" or _G.Aim360) and "360°" or "Zone",
@@ -1116,7 +1153,8 @@ do
             applyAimbotMode(v)
         end),
     })
-    uiControls.AimbotRadius = AimSec:Slider({
+
+    uiControls.AimbotRadius = AimSettingSec:Slider({
         Title = "Bán kính vòng tròn (Zone)",
         Step = 1,
         Value = {
@@ -1955,6 +1993,11 @@ task.spawn(function()
                     and Vector2.new(ZoneDragButton.AbsolutePosition.X + ZoneDragButton.AbsoluteSize.X / 2, ZoneDragButton.AbsolutePosition.Y + ZoneDragButton.AbsoluteSize.Y / 2)
                     or Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
+                local preferNearest = (_G.AimMode ~= "Tự aim")
+                if preferNearest then
+                    shortest = math.huge
+                end
+
                 for _, char in ipairs(candidates) do
                     local hPart = char:FindFirstChild("HumanoidRootPart")
                     local hum = char:FindFirstChildOfClass("Humanoid")
@@ -1964,7 +2007,11 @@ task.spawn(function()
                         local allowedDist = isNPC and (_G.MaxDist or 700) or playerAimRange
                         if mag <= allowedDist then
                             if (isNPC and _G.SilentAim_NPC) or (not isNPC and (_G.SilentAim_Player or _G.CamLock_Player)) then
-                                if use360 then
+                                if preferNearest then
+                                    if mag < shortest then
+                                        shortest, best = mag, hPart
+                                    end
+                                elseif use360 then
                                     if mag < shortest then shortest, best = mag, hPart end
                                 else
                                     local sp, vis = Camera:WorldToViewportPoint(hPart.Position)
