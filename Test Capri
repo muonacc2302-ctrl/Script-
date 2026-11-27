@@ -121,6 +121,7 @@ local CapriDefaults = {
     HB = false,
     CamLock_Player = false,
     SilentAim_Player = false,
+    SilentAimPlayerRange = 700,
     Jump_Active = false,
     V4_Active = false,
     SuperDash_Active = false,
@@ -1196,6 +1197,18 @@ do
             AimBtn.BackgroundTransparency = v and 0.2 or 0.5
         end),
     })
+    uiControls.SilentAimPlayerRange = Tabs.PvP:Slider({
+        Title = "Tầm xa Aim mục tiêu",
+        Step = 1,
+        Value = {
+            Min = 0,
+            Max = 1000,
+            Default = math.clamp(tonumber(_G.SilentAimPlayerRange) or 700, 0, 1000),
+        },
+        Callback = Bind("SilentAimPlayerRange", function(v)
+            _G.SilentAimPlayerRange = math.clamp(tonumber(v) or 0, 0, 1000)
+        end),
+    })
     uiControls.Jump_Active = Tabs.PvP:Toggle({ Title = "Nút nhảy cao", Value = _G.Jump_Active, Callback = Bind("Jump_Active", function(v) JumpBtn.Visible = v end) })
     uiControls.V4_Active = Tabs.PvP:Toggle({ Title = "Nút bật V4", Value = _G.V4_Active, Callback = Bind("V4_Active", function(v) V4Btn.Visible = v end) })
     uiControls.SuperDash_Active = Tabs.PvP:Toggle({ Title = "Nút lướt siêu xa", Value = _G.SuperDash_Active, Callback = Bind("SuperDash_Active", function(v) DashBtn.Visible = v end) })
@@ -2062,13 +2075,16 @@ task.spawn(function()
                 and Vector2.new(ZoneDragButton.AbsolutePosition.X + ZoneDragButton.AbsoluteSize.X / 2, ZoneDragButton.AbsolutePosition.Y + ZoneDragButton.AbsoluteSize.Y / 2)
                 or Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
+            local playerAimRange = math.clamp(tonumber(_G.SilentAimPlayerRange) or 700, 0, 1000)
+
             for _, char in ipairs(candidates) do
                 local hPart = char:FindFirstChild("HumanoidRootPart")
                 local hum = char:FindFirstChildOfClass("Humanoid")
                 if hPart and hum and hum.Health > 0 then
                     local mag = (hPart.Position - root.Position).Magnitude
-                    if mag <= (_G.MaxDist or 700) then
-                        local isNPC = Players:GetPlayerFromCharacter(char) == nil
+                    local isNPC = Players:GetPlayerFromCharacter(char) == nil
+                    local allowedDist = isNPC and (_G.MaxDist or 700) or playerAimRange
+                    if mag <= allowedDist then
                         if (isNPC and _G.SilentAim_NPC) or (not isNPC and (_G.SilentAim_Player or _G.CamLock_Player)) then
                             if _G.Aim360 then
                                 if mag < shortest then shortest, best = mag, hPart end
