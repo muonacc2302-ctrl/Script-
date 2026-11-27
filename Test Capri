@@ -115,7 +115,7 @@ local CapriDefaults = {
     AutoFleeHP = 30,
     RaidChip = "Flame",
 
-    -- PVP & Aimbot
+    -- PVP & Aim ẩn người chơi
     Speed_Active = false,
     WalkSpeedValue = 35,
     HB = false,
@@ -125,20 +125,11 @@ local CapriDefaults = {
     Jump_Active = false,
     V4_Active = false,
     SuperDash_Active = false,
-    SilentAimM1R = false,
-    SilentAimGunM1 = false,
-    SilentAimSkill = false,
-    SilentAimSkills = { "Z", "X", "C", "V", "F" },
     SilentAimMethod = "Người gần chuột nhất",
-    SilentAimTargetPlayers = true,
     SilentAimTeamCheck = false,
     SilentAimExcludePVP = false,
     SilentAimExcludeSafeZone = false,
-    SilentAimShowLine = false,
-    SilentAimPart = "Head",
     SilentAimSelectedPlayer = "",
-    LockHotkey = false,
-    LockHotkeyKey = "H",
 
     -- Siêu Bá Khí
     KA = false,
@@ -1026,21 +1017,6 @@ end
 -- PVP TAB: SPEED, HB, FLOATING BUTTONS & AIMBOT SETTINGS
 -- ==========================================
 do
-    local LastSkillPressed = "Z"
-    UserInputService.InputBegan:Connect(function(input)
-        if UserInputService:GetFocusedTextBox() then return end
-        local km = { [Enum.KeyCode.Z] = "Z", [Enum.KeyCode.X] = "X", [Enum.KeyCode.C] = "C", [Enum.KeyCode.V] = "V", [Enum.KeyCode.F] = "F" }
-        if km[input.KeyCode] then LastSkillPressed = km[input.KeyCode] end
-    end)
-
-    local function isSkillOk()
-        local sk = _G.SilentAimSkills
-        if type(sk) ~= "table" or next(sk) == nil then return true end
-        if sk[LastSkillPressed] ~= nil then return sk[LastSkillPressed] == true end
-        for _, v in pairs(sk) do if v == LastSkillPressed then return true end end
-        return false
-    end
-
     local function getAimOrigin()
         if _G.ShowZone then
             return Vector2.new(
@@ -1101,22 +1077,15 @@ do
 
     getgenv().Capri.PassPlayerAimFilter = passAimFilter
 
-    local function getTargetPartFromCharacter(char)
-        if not char or not isAlive(char) then return nil end
-        local partName = _G.SilentAimPart or "Head"
-        return char:FindFirstChild(partName) or char:FindFirstChild("HumanoidRootPart")
-    end
-
-    local function getCustomAimbotPart()
-        if not _G.SilentAimTargetPlayers then return nil end
+    local function getSilentAimPlayerPart()
         local method = _G.SilentAimMethod or "Người gần chuột nhất"
         local maxRange = math.clamp(tonumber(_G.SilentAimPlayerRange) or 700, 0, 1000)
         local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
         if method == "Chọn người chơi" then
             local p = Players:FindFirstChild(_G.SilentAimSelectedPlayer or "")
-            if not p or not passAimFilter(p) or not p.Character then return nil end
-            local pt = getTargetPartFromCharacter(p.Character)
+            if not p or not passAimFilter(p) or not p.Character or not isAlive(p.Character) then return nil end
+            local pt = p.Character:FindFirstChild("HumanoidRootPart") or p.Character:FindFirstChild("Head")
             if pt and myRoot and (pt.Position - myRoot.Position).Magnitude <= maxRange then
                 return pt
             end
@@ -1125,8 +1094,8 @@ do
             if not myRoot then return nil end
             local best, bestD = nil, maxRange
             for _, p in ipairs(Players:GetPlayers()) do
-                if passAimFilter(p) and p.Character then
-                    local pt = getTargetPartFromCharacter(p.Character)
+                if passAimFilter(p) and p.Character and isAlive(p.Character) then
+                    local pt = p.Character:FindFirstChild("HumanoidRootPart") or p.Character:FindFirstChild("Head")
                     if pt then
                         local d = (pt.Position - myRoot.Position).Magnitude
                         if d <= bestD then best, bestD = pt, d end
@@ -1138,8 +1107,8 @@ do
             local origin = getAimOrigin()
             local best, bestD = nil, _G.FOV or 250
             for _, p in ipairs(Players:GetPlayers()) do
-                if passAimFilter(p) and p.Character then
-                    local pt = getTargetPartFromCharacter(p.Character)
+                if passAimFilter(p) and p.Character and isAlive(p.Character) then
+                    local pt = p.Character:FindFirstChild("HumanoidRootPart") or p.Character:FindFirstChild("Head")
                     if pt and myRoot and (pt.Position - myRoot.Position).Magnitude <= maxRange then
                         local sp, vis = Camera:WorldToViewportPoint(pt.Position)
                         if vis then
@@ -1153,149 +1122,7 @@ do
         end
     end
 
-    local rjrLine
-    pcall(function()
-        rjrLine = Drawing.new("Line")
-        rjrLine.Visible = false
-        rjrLine.Thickness = 2
-        rjrLine.Color = Color3.fromRGB(255, 0, 0)
-        getgenv().CapriRJRSilentLine = rjrLine
-    end)
-
-    local customAimPart = nil
-    local mouse = LocalPlayer:GetMouse()
-
-    if typeof(hookmetamethod) == "function" then
-        pcall(function()
-            local oldIdx
-            oldIdx = hookmetamethod(game, "__index", function(self, key)
-                if not checkcaller() and _G.SilentAimM1R and self == mouse and customAimPart and customAimPart.Parent and isSkillOk() then
-                    local tp = customAimPart.Position + ((customAimPart.AssemblyLinearVelocity or Vector3.zero) * (_G.PredictionStrength or 0.165))
-                    local cp = Camera.CFrame.Position
-                    if key == "Hit" then return CFrame.new(tp)
-                    elseif key == "Target" then return customAimPart
-                    elseif key == "UnitRay" then return Ray.new(cp, (tp - cp).Unit)
-                    elseif key == "Origin" then return cp
-                    elseif key == "Direction" then return (tp - cp).Unit end
-                end
-                return oldIdx(self, key)
-            end)
-        end)
-    end
-
-    RunService.RenderStepped:Connect(function()
-        local origin = getAimOrigin()
-        if _G.SilentAimM1R or _G.SilentAimSkill or _G.SilentAimShowLine or _G.SilentAimGunM1 then
-            customAimPart = getCustomAimbotPart()
-            if _G.SilentAimSkill and customAimPart and customAimPart.Parent and isSkillOk() then
-                _G.SilentAimTargetPos = customAimPart.Position + ((customAimPart.AssemblyLinearVelocity or Vector3.zero) * (_G.PredictionStrength or 0.165))
-            else
-                _G.SilentAimTargetPos = nil
-            end
-        else
-            customAimPart = nil
-            _G.SilentAimTargetPos = nil
-        end
-        if rjrLine then
-            pcall(function()
-                if _G.SilentAimShowLine and customAimPart and customAimPart.Parent then
-                    local sp, vis = Camera:WorldToViewportPoint(customAimPart.Position)
-                    if vis then
-                        rjrLine.From = origin
-                        rjrLine.To = Vector2.new(sp.X, sp.Y)
-                        rjrLine.Visible = true
-                        return
-                    end
-                end
-                rjrLine.Visible = false
-            end)
-        end
-    end)
-
-    -- Aimbot M1 Gun (PVP Player Targets)
-    do
-        local Net = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Net")
-        local ShootGunEvent = Net:WaitForChild("RE/ShootGunEvent")
-        local Validator2 = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Validator2")
-        local shootFunc, idx, dragonReady = nil, {}, false
-        local lastShot = 0
-
-        local function initDragon()
-            if dragonReady then return end
-            local ok = pcall(function()
-                local cc = require(ReplicatedStorage:WaitForChild("Controllers"):WaitForChild("CombatController"))
-                for _, v in ipairs(debug.getupvalues(cc.Attack)) do
-                    if type(v) == "function" then
-                        for i, uv in ipairs(debug.getupvalues(v)) do
-                            if uv == 727595 then
-                                shootFunc = v
-                                idx = { u25 = i - 3, u21 = i - 2, u24 = i - 1, u20 = i, u22 = i + 1, u23 = i + 2, u26 = i + 3 }
-                                break
-                            end
-                        end
-                        if shootFunc then break end
-                    end
-                end
-            end)
-            if ok and shootFunc then dragonReady = true end
-        end
-
-        local function fireDragon(pos, hit)
-            if not shootFunc then return end
-            local u20 = debug.getupvalue(shootFunc, idx.u20)
-            local u21 = debug.getupvalue(shootFunc, idx.u21)
-            local u22 = debug.getupvalue(shootFunc, idx.u22)
-            local u23 = debug.getupvalue(shootFunc, idx.u23)
-            local u24 = debug.getupvalue(shootFunc, idx.u24)
-            local u25 = debug.getupvalue(shootFunc, idx.u25)
-            local u26 = debug.getupvalue(shootFunc, idx.u26)
-            local u79 = u25 * u21
-            local u80 = (u24 * u21 + u25 * u20) % u22
-            u80 = (u80 * u22 + u79) % u23
-            u24 = math.floor(u80 / u22)
-            u25 = u80 - u24 * u22
-            u26 = u26 + 1
-            debug.setupvalue(shootFunc, idx.u24, u24)
-            debug.setupvalue(shootFunc, idx.u25, u25)
-            debug.setupvalue(shootFunc, idx.u26, u26)
-            Validator2:FireServer(math.floor(u80 / u23 * 16777215), u26)
-            ShootGunEvent:FireServer(pos, { hit })
-        end
-
-        task.spawn(function()
-            initDragon()
-            while task.wait(0.05) do
-                if not _G.SilentAimGunM1 then continue end
-                if not dragonReady then initDragon() end
-
-                local char = LocalPlayer.Character
-                local tool = char and char:FindFirstChildOfClass("Tool")
-                if not tool or tool.ToolTip ~= "Gun" then continue end
-
-                local part = customAimPart or getCustomAimbotPart()
-                local model = part and part:FindFirstAncestorOfClass("Model")
-                local plr = model and Players:GetPlayerFromCharacter(model)
-                if not plr or plr == LocalPlayer or not passAimFilter(plr) then continue end
-                if not part or not part.Parent or not isAlive(model) then continue end
-
-                local myRoot = char:FindFirstChild("HumanoidRootPart")
-                local maxRange = math.clamp(tonumber(_G.SilentAimPlayerRange) or 700, 0, 1000)
-                if not myRoot or (part.Position - myRoot.Position).Magnitude > maxRange then continue end
-
-                if tick() - lastShot >= 0.08 then
-                    lastShot = tick()
-                    local pred = part.Position + ((part.AssemblyLinearVelocity or Vector3.zero) * (_G.PredictionStrength or 0.165))
-                    if tool.Name == "Dragonstorm" and dragonReady then
-                        pcall(fireDragon, pred, part)
-                    else
-                        pcall(function()
-                            ShootGunEvent:FireServer(pred, { part })
-                        end)
-                    end
-                end
-            end
-        end)
-    end
+    getgenv().Capri.GetSilentAimPlayerPart = getSilentAimPlayerPart
 
     uiControls.Speed_Active = Tabs.PvP:Toggle({
         Title = "Tăng tốc chạy",
@@ -1337,53 +1164,45 @@ do
     uiControls.V4_Active = Tabs.PvP:Toggle({ Title = "Nút bật V4", Value = _G.V4_Active, Callback = Bind("V4_Active", function(v) V4Btn.Visible = v end) })
     uiControls.SuperDash_Active = Tabs.PvP:Toggle({ Title = "Nút lướt siêu xa", Value = _G.SuperDash_Active, Callback = Bind("SuperDash_Active", function(v) DashBtn.Visible = v end) })
 
-    local AimSec = Tabs.PvP:Section({ Title = "Cài đặt Aim" })
-    AimSec:Toggle({ Title = "Aimbot M1 / R", Value = _G.SilentAimM1R, Callback = Bind("SilentAimM1R") })
-    uiControls.SilentAimGunM1 = AimSec:Toggle({ Title = "Aimbot M1 Gun", Value = _G.SilentAimGunM1, Callback = Bind("SilentAimGunM1") })
-    AimSec:Toggle({ Title = "Aimbot kỹ năng", Value = _G.SilentAimSkill, Callback = Bind("SilentAimSkill") })
-    AimSec:Dropdown({ Title = "Phím kỹ năng Aimbot", Values = { "Z", "X", "C", "V", "F" }, Value = _G.SilentAimSkills, Multi = true, Callback = Bind("SilentAimSkills") })
-    AimSec:Dropdown({ Title = "Chế độ chọn mục tiêu", Values = { "Người gần chuột nhất", "Người gần nhất", "Chọn người chơi" }, Value = _G.SilentAimMethod, Callback = Bind("SilentAimMethod") })
-    AimSec:Toggle({ Title = "Mục tiêu người chơi", Value = _G.SilentAimTargetPlayers, Callback = Bind("SilentAimTargetPlayers") })
-    AimSec:Toggle({ Title = "Bỏ qua đồng đội", Value = _G.SilentAimTeamCheck, Callback = Bind("SilentAimTeamCheck") })
-    AimSec:Toggle({ Title = "Bỏ qua người tắt PvP", Value = _G.SilentAimExcludePVP, Callback = Bind("SilentAimExcludePVP") })
-    AimSec:Toggle({ Title = "Bỏ qua vùng an toàn", Value = _G.SilentAimExcludeSafeZone, Callback = Bind("SilentAimExcludeSafeZone") })
-    AimSec:Toggle({ Title = "Hiện đường khóa mục tiêu", Value = _G.SilentAimShowLine, Callback = Bind("SilentAimShowLine") })
-    AimSec:Dropdown({ Title = "Bộ phận ngắm", Values = { "Head", "HumanoidRootPart", "UpperTorso", "LowerTorso", "Torso" }, Value = _G.SilentAimPart, Callback = Bind("SilentAimPart") })
-
+    local AimSec = Tabs.PvP:Section({ Title = "Cài đặt Aimbot" })
+    uiControls.SilentAimMethod = AimSec:Dropdown({
+        Title = "Chế độ aim mục tiêu",
+        Values = { "Người gần chuột nhất", "Người gần nhất", "Chọn người chơi" },
+        Value = _G.SilentAimMethod,
+        Callback = Bind("SilentAimMethod"),
+    })
     local aimDrop = AimSec:Dropdown({
-        Title = "Chọn người chơi ngắm",
+        Title = "Tùy chọn player",
         Values = getPlayerList(),
         Value = _G.SilentAimSelectedPlayer,
-        Callback = function(v) _G.SilentAimSelectedPlayer = v or ""; SaveCapriConfig() end,
+        Callback = function(v)
+            _G.SilentAimSelectedPlayer = v or ""
+            SaveCapriConfig()
+        end,
     })
     AimSec:Button({
-        Title = "Làm mới danh sách người chơi",
+        Title = "Làm mới player",
         Callback = function()
             local lst = getPlayerList()
             if aimDrop and aimDrop.Refresh then pcall(function() aimDrop:Refresh(lst, true) end) end
+            notifyCapri("Aim ẩn người chơi", "Đã làm mới danh sách player", 1.5)
         end,
     })
-    AimSec:Toggle({
-        Title = "Khóa mục tiêu bằng phím tắt",
-        Value = _G.LockHotkey,
-        Callback = Bind("LockHotkey", function(v)
-            if v then
-                local pt = customAimPart or getCustomAimbotPart()
-                local mdl = pt and pt:FindFirstAncestorOfClass("Model")
-                local plr = mdl and Players:GetPlayerFromCharacter(mdl)
-                if plr and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                    getgenv().Capri.CurrentTarget = plr.Character.HumanoidRootPart
-                    getgenv().Capri.LockEnabled = true
-                    notifyCapri("Khóa phím tắt", "Đã khóa mục tiêu: " .. plr.Name, 2)
-                else
-                    notifyCapri("Khóa phím tắt", "Không có mục tiêu trong phạm vi", 2)
-                end
-            else
-                getgenv().Capri.LockEnabled = false
-            end
-        end),
+    uiControls.SilentAimTeamCheck = AimSec:Toggle({
+        Title = "Bỏ qua đồng đội",
+        Value = _G.SilentAimTeamCheck,
+        Callback = Bind("SilentAimTeamCheck"),
     })
-    AimSec:Keybind({ Title = "Phím tắt khóa mục tiêu", Value = _G.LockHotkeyKey, Callback = function(v) _G.LockHotkeyKey = tostring(v); SaveCapriConfig() end })
+    uiControls.SilentAimExcludePVP = AimSec:Toggle({
+        Title = "Bỏ qua người tắt pvp",
+        Value = _G.SilentAimExcludePVP,
+        Callback = Bind("SilentAimExcludePVP"),
+    })
+    uiControls.SilentAimExcludeSafeZone = AimSec:Toggle({
+        Title = "Bỏ qua vùng an toàn",
+        Value = _G.SilentAimExcludeSafeZone,
+        Callback = Bind("SilentAimExcludeSafeZone"),
+    })
 end
 
 -- ==========================================
@@ -2188,7 +2007,7 @@ task.spawn(function()
         local best, shortest = nil, (_G.Aim360 and _G.MaxDist or _G.FOV)
         local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         local passPlayerFilter = getgenv().Capri and getgenv().Capri.PassPlayerAimFilter
-        local aimPartName = _G.SilentAimPart or "Head"
+        local getPlayerAimPart = getgenv().Capri and getgenv().Capri.GetSilentAimPlayerPart
 
         if root then
             local zoneCenter = _G.ShowZone
@@ -2198,34 +2017,23 @@ task.spawn(function()
             local playerAimRange = math.clamp(tonumber(_G.SilentAimPlayerRange) or 700, 0, 1000)
 
             -- 1. Mục tiêu người chơi cho Aim ẩn người chơi / Khóa camera người chơi
-            if _G.SilentAimTargetPlayers and (_G.SilentAim_Player or _G.CamLock_Player) then
-                local candidatePlayers = {}
-                if _G.SilentAimMethod == "Chọn người chơi" and (_G.SilentAimSelectedPlayer or "") ~= "" then
-                    local sel = Players:FindFirstChild(_G.SilentAimSelectedPlayer)
-                    if sel then table.insert(candidatePlayers, sel) end
-                else
-                    for _, p in ipairs(Players:GetPlayers()) do
-                        table.insert(candidatePlayers, p)
-                    end
-                end
-
-                for _, p in ipairs(candidatePlayers) do
+            if _G.SilentAim_Player and getPlayerAimPart then
+                best = getPlayerAimPart()
+            elseif _G.CamLock_Player then
+                for _, p in ipairs(Players:GetPlayers()) do
                     if p ~= LocalPlayer and p.Character and (not passPlayerFilter or passPlayerFilter(p)) then
+                        local hPart = p.Character:FindFirstChild("HumanoidRootPart")
                         local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                        local aimPart = p.Character:FindFirstChild(aimPartName) or p.Character:FindFirstChild("HumanoidRootPart")
-                        if aimPart and hum and hum.Health > 0 then
-                            local mag = (aimPart.Position - root.Position).Magnitude
+                        if hPart and hum and hum.Health > 0 then
+                            local mag = (hPart.Position - root.Position).Magnitude
                             if mag <= playerAimRange then
-                                if _G.SilentAimMethod == "Chọn người chơi" then
-                                    best = aimPart
-                                    break
-                                elseif _G.Aim360 then
-                                    if mag < shortest then shortest, best = mag, aimPart end
+                                if _G.Aim360 then
+                                    if mag < shortest then shortest, best = mag, hPart end
                                 else
-                                    local sp, vis = Camera:WorldToViewportPoint(aimPart.Position)
+                                    local sp, vis = Camera:WorldToViewportPoint(hPart.Position)
                                     if vis then
                                         local sd = (Vector2.new(sp.X, sp.Y) - zoneCenter).Magnitude
-                                        if sd <= _G.FOV and sd < shortest then shortest, best = sd, aimPart end
+                                        if sd <= _G.FOV and sd < shortest then shortest, best = sd, hPart end
                                     end
                                 end
                             end
@@ -2234,10 +2042,10 @@ task.spawn(function()
                 end
             end
 
-            -- 2. Mục tiêu NPC / Quái chỉ dành riêng cho Aim ẩn NPC / Quái (Siêu Bá Khí)
+            -- 2. Mục tiêu NPC / Quái riêng cho Aim ẩn NPC / Quái
             if not best and _G.SilentAim_NPC and Workspace:FindFirstChild("Enemies") then
                 for _, e in ipairs(Workspace.Enemies:GetChildren()) do
-                    local hPart = e:FindFirstChild(aimPartName) or e:FindFirstChild("HumanoidRootPart")
+                    local hPart = e:FindFirstChild("HumanoidRootPart")
                     local hum = e:FindFirstChildOfClass("Humanoid")
                     if hPart and hum and hum.Health > 0 and Players:GetPlayerFromCharacter(e) == nil then
                         local mag = (hPart.Position - root.Position).Magnitude
@@ -2270,43 +2078,27 @@ end)
 
 if typeof(hookmetamethod) == "function" and typeof(getnamecallmethod) == "function" then
     pcall(function()
-        local SKILL_KEYS = { Z = true, X = true, C = true, V = true, F = true }
         local old
         old = hookmetamethod(game, "__namecall", function(self, ...)
             local method = getnamecallmethod()
             local args = { ... }
             if not checkcaller() and (method == "FireServer" or method == "InvokeServer") then
-                local remoteName = tostring(self)
-                local firstArg = args[1]
-                local isSkillCall = (typeof(firstArg) == "string" and SKILL_KEYS[firstArg])
-                    or string.find(remoteName, "Skill")
-                    or string.find(remoteName, "Ability")
-                    or string.find(remoteName, "Awakening")
-
-                local isGunOrM1Remote = (remoteName == "RE/ShootGunEvent")
-                    or string.find(remoteName, "Shoot")
-                    or string.find(remoteName, "Gun")
-                    or (remoteName == "RE/RegisterHit")
-                    or (remoteName == "CommF_" and firstArg == "Attack")
-
-                local char = LocalPlayer.Character
-                local tool = char and char:FindFirstChildOfClass("Tool")
-                local toolType = tool and tool.ToolTip or ""
-                local isAllowedTool = (toolType == "Gun" or toolType == "Melee" or toolType == "Sword")
-
                 local target = getgenv().Capri and getgenv().Capri.CurrentTarget
-                if target and target.Parent and (_G.SilentAim_Player or _G.SilentAim_NPC) and not isSkillCall and (isGunOrM1Remote or (isAllowedTool and self:IsDescendantOf(ReplicatedStorage))) then
+                local passPlayerFilter = getgenv().Capri and getgenv().Capri.PassPlayerAimFilter
+                local canApplyPlayerAim = false
+                if _G.SilentAim_Player and target and target.Parent then
+                    local mdl = target:FindFirstAncestorOfClass("Model")
+                    local plr = mdl and Players:GetPlayerFromCharacter(mdl)
+                    if plr and plr ~= LocalPlayer and (not passPlayerFilter or passPlayerFilter(plr)) then
+                        canApplyPlayerAim = true
+                    end
+                end
+                local canApplyNPCAim = _G.SilentAim_NPC and target and target.Parent
+                if canApplyPlayerAim or canApplyNPCAim then
                     local pred = target.Position + ((target.AssemblyLinearVelocity or target.Velocity or Vector3.zero) * (_G.PredictionStrength or 0.165))
                     for i, v in ipairs(args) do
                         if typeof(v) == "Vector3" then args[i] = pred
                         elseif typeof(v) == "CFrame" then args[i] = CFrame.new(v.Position, pred) end
-                    end
-                elseif _G.SilentAimSkill and _G.SilentAimTargetPos then
-                    local sName = tostring(self)
-                    if sName == "RemoteEvent" or sName == "CommE" or sName == "RemoteFunction" then
-                        for i, v in ipairs(args) do
-                            if typeof(v) == "Vector3" then args[i] = _G.SilentAimTargetPos end
-                        end
                     end
                 end
             end
@@ -2355,7 +2147,8 @@ RunService.RenderStepped:Connect(function()
         local mdl = curTarget:FindFirstAncestorOfClass("Model")
         local plr = mdl and Players:GetPlayerFromCharacter(mdl)
         local hum = mdl and mdl:FindFirstChildOfClass("Humanoid")
-        if plr and plr ~= LocalPlayer and hum and hum.Health > 0 then
+        local passPlayerFilter = getgenv().Capri and getgenv().Capri.PassPlayerAimFilter
+        if plr and plr ~= LocalPlayer and hum and hum.Health > 0 and (not passPlayerFilter or passPlayerFilter(plr)) then
             local pred = curTarget.Position + ((curTarget.AssemblyLinearVelocity or Vector3.zero) * (_G.PredictionStrength or 0.165))
             local sp, vis = Camera:WorldToViewportPoint(pred)
             if vis and SilentAimLine and SilentAimDot then
