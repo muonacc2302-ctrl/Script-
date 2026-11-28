@@ -115,21 +115,18 @@ local CapriDefaults = {
     AutoFleeHP = 30,
     RaidChip = "Flame",
 
-    -- PVP
+    -- PVP & Aimbot
     Speed_Active = false,
     WalkSpeedValue = 35,
     HB = false,
+    CamLock_Player = false,
+    SilentAim_Player = false,
+    SilentAimPlayerRange = 700,
     Jump_Active = false,
     V4_Active = false,
     SuperDash_Active = false,
 
-    -- Player & Aimbot
-    SelectedAimPlayer = "",
-    AimSelectedPlayer_Active = false,
-    AimMode = "Gần nhất", -- "Gần nhất" | "Tự aim"
-    CamLock_Player = false,
-    SilentAim_Player = false,
-    SilentAimPlayerRange = 700,
+    -- Cài đặt Aimbot (2 chế độ: Zone / 360°)
     AimbotMode = "Zone",
     AimbotRadius = 250,
 
@@ -372,17 +369,12 @@ local function getCircleRadius()
     return math.clamp(tonumber(_G.AimbotRadius) or tonumber(_G.FOV) or 250, 20, 800)
 end
 
-local function isAnyPlayerAimEnabled()
-    return (_G.SilentAim_Player == true) or (_G.AimSelectedPlayer_Active == true)
-end
-
 -- Đồng bộ hiển thị nút nổi ban đầu
 local function refreshFloatingVisibility()
-    local aimOn = isAnyPlayerAimEnabled()
     CamBtn.Visible = _G.CamLock_Player or _G.CamLock_Active
-    AimBtn.Visible = aimOn or _G.Aim_Active
-    AimBtn.BackgroundColor3 = aimOn and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(40, 40, 40)
-    AimBtn.BackgroundTransparency = aimOn and 0.2 or 0.5
+    AimBtn.Visible = _G.SilentAim_Player or _G.Aim_Active
+    AimBtn.BackgroundColor3 = _G.SilentAim_Player and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(40, 40, 40)
+    AimBtn.BackgroundTransparency = _G.SilentAim_Player and 0.2 or 0.5
     JumpBtn.Visible = _G.Jump_Active
     V4Btn.Visible = _G.V4_Active
     DashBtn.Visible = _G.SuperDash_Active
@@ -530,7 +522,6 @@ local Window = WindUI:CreateWindow({
 local Tabs = {
     Main = Window:Tab({ Title = "Main" }),
     PvP = Window:Tab({ Title = "PVP" }),
-    Player = Window:Tab({ Title = "Player" }),
     Super = Window:Tab({ Title = "Siêu Bá Khí" }),
     Shop = Window:Tab({ Title = "Shop" }),
     ESP = Window:Tab({ Title = "ESP" }),
@@ -604,17 +595,69 @@ CamBtn.MouseButton1Click:Connect(function()
 end)
 
 AimBtn.MouseButton1Click:Connect(function()
-    if _G.AimSelectedPlayer_Active then
-        _G.AimSelectedPlayer_Active = false
-        setUI("AimSelectedPlayer_Active", false)
-    end
     _G.SilentAim_Player = not _G.SilentAim_Player
-    local aimOn = isAnyPlayerAimEnabled()
-    AimBtn.BackgroundColor3 = aimOn and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(40, 40, 40)
-    AimBtn.BackgroundTransparency = aimOn and 0.2 or 0.5
+    AimBtn.BackgroundColor3 = _G.SilentAim_Player and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(40, 40, 40)
+    AimBtn.BackgroundTransparency = _G.SilentAim_Player and 0.2 or 0.5
     setUI("SilentAim_Player", _G.SilentAim_Player)
     SaveCapriConfig()
 end)
+
+-- Helper chung cho Fruit M1 & Void Fruit M1 (lấy từ RJR.txt)
+local function GetPlayerFruit()
+    local char = LocalPlayer.Character
+    if char then
+        for _, tool in pairs(char:GetChildren()) do
+            if tool:IsA("Tool") and tool.ToolTip == "Blox Fruit" then
+                return tool
+            end
+        end
+    end
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool.ToolTip == "Blox Fruit" then
+                return tool
+            end
+        end
+    end
+    return nil
+end
+
+local function GetMaxCombo(tool)
+    if not tool then return 5 end
+    local n = tool.Name
+    if n == "T-Rex-T-Rex" then return 4 end
+    if n == "Blade-Blade" then return 2 end
+    if n == "Pain-Pain" then return 4 end
+    if n == "Control-Control" then return 4 end
+    if n == "Gas-Gas" then return 5 end
+    if n == "Dragon-Dragon" then
+        local char = LocalPlayer.Character
+        return (char and char:FindFirstChild("DragonHybrid")) and 5 or 3
+    end
+    return 5
+end
+
+local VoidFruitM1Thread = nil
+local voidVec = Vector3.new(9e30, 9e30, 9e30)
+
+local function SetVoidFruitM1Enabled(enabled)
+    if VoidFruitM1Thread then
+        task.cancel(VoidFruitM1Thread)
+        VoidFruitM1Thread = nil
+    end
+    if not enabled then return end
+    VoidFruitM1Thread = task.spawn(function()
+        while _G.VoidFruitM1 do
+            task.wait(0.3)
+            local fruit = GetPlayerFruit()
+            local remote = fruit and fruit:FindFirstChild("LeftClickRemote")
+            if not remote then continue end
+            local maxCombo = GetMaxCombo(fruit)
+            pcall(function() remote:FireServer(voidVec, maxCombo, true) end)
+        end
+    end)
+end
 
 -- ==========================================
 -- MAIN TAB: FAST ATTACK, GUN M1, FRUIT M1, AUTO V3/V4/HAKI/KEN/FLEE
@@ -840,32 +883,11 @@ do
     uiControls.GunM1Mobs = Tabs.Main:Toggle({ Title = "Bắn M1 quái", Value = _G.GunM1Mobs, Callback = Bind("GunM1Mobs") })
     uiControls.GunM1Player = Tabs.Main:Toggle({ Title = "Bắn M1 người chơi", Value = _G.GunM1Player, Callback = Bind("GunM1Player") })
 
-    -- Fruit M1 & Void Fruit M1
-    local function getFruitTool()
-        for _, src in ipairs({ LocalPlayer.Character, LocalPlayer:FindFirstChild("Backpack") }) do
-            if src then
-                for _, t in ipairs(src:GetChildren()) do
-                    if t:IsA("Tool") and t.ToolTip == "Blox Fruit" then return t end
-                end
-            end
-        end
-        return nil
-    end
-
-    local function getFruitCombo(tool)
-        if not tool then return 5 end
-        local map = { ["T-Rex-T-Rex"] = 4, ["Blade-Blade"] = 2, ["Pain-Pain"] = 4, ["Control-Control"] = 4, ["Gas-Gas"] = 5 }
-        if map[tool.Name] then return map[tool.Name] end
-        if tool.Name == "Dragon-Dragon" then
-            return (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("DragonHybrid")) and 5 or 3
-        end
-        return 5
-    end
-
+    -- Fruit M1
     task.spawn(function()
         while true do
             if not _G.FruitM1 then task.wait(0.2); continue end
-            local fruit = getFruitTool()
+            local fruit = GetPlayerFruit()
             local remote = fruit and fruit:FindFirstChild("LeftClickRemote")
             local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
             if remote and myHRP then
@@ -895,22 +917,7 @@ do
         end
     end)
 
-    task.spawn(function()
-        local voidVec = Vector3.new(9e30, 9e30, 9e30)
-        while true do
-            if not _G.VoidFruitM1 then task.wait(0.3); continue end
-            local fruit = getFruitTool()
-            local remote = fruit and fruit:FindFirstChild("LeftClickRemote")
-            if remote then
-                local combo = getFruitCombo(fruit)
-                pcall(function() remote:FireServer(voidVec, combo, true) end)
-            end
-            task.wait(0.3)
-        end
-    end)
-
     uiControls.FruitM1 = Tabs.Main:Toggle({ Title = "Đánh thường trái ác quỷ", Value = _G.FruitM1, Callback = Bind("FruitM1") })
-    uiControls.VoidFruitM1 = Tabs.Main:Toggle({ Title = "Đánh trái ác quỷ tầm xa", Value = _G.VoidFruitM1, Callback = Bind("VoidFruitM1") })
 
     -- Auto Haki / Ken / V3 / V4 / Flee
     task.spawn(function()
@@ -1016,7 +1023,7 @@ do
 end
 
 -- ==========================================
--- PVP TAB: SPEED, HB, FLOATING BUTTONS
+-- PVP TAB: SPEED, HB, VOID M1, FLOATING BUTTONS & AIMBOT SETTINGS
 -- ==========================================
 do
     uiControls.Speed_Active = Tabs.PvP:Toggle({
@@ -1031,82 +1038,29 @@ do
     })
     uiControls.WalkSpeedValue = Tabs.PvP:Slider({ Title = "Tốc độ chạy", Step = 1, Value = { Min = 16, Max = 150, Default = _G.WalkSpeedValue }, Callback = Bind("WalkSpeedValue") })
     uiControls.HB = Tabs.PvP:Toggle({ Title = "Mở rộng Hitbox", Value = _G.HB, Callback = Bind("HB") })
-    uiControls.Jump_Active = Tabs.PvP:Toggle({ Title = "Nút nhảy cao", Value = _G.Jump_Active, Callback = Bind("Jump_Active", function(v) JumpBtn.Visible = v end) })
-    uiControls.V4_Active = Tabs.PvP:Toggle({ Title = "Nút bật V4", Value = _G.V4_Active, Callback = Bind("V4_Active", function(v) V4Btn.Visible = v end) })
-    uiControls.SuperDash_Active = Tabs.PvP:Toggle({ Title = "Nút lướt siêu xa", Value = _G.SuperDash_Active, Callback = Bind("SuperDash_Active", function(v) DashBtn.Visible = v end) })
-end
-
--- ==========================================
--- PLAYER TAB: CHỌN PLAYER, LÀM MỚI PLAYER, AIM PLAYER, CHẾ ĐỘ AIM & SETTING AIM
--- ==========================================
-do
-    local aimPlayerDrop = Tabs.Player:Dropdown({
-        Title = "Chọn player",
-        Values = getPlayerList(),
-        Value = _G.SelectedAimPlayer,
-        Callback = function(v)
-            _G.SelectedAimPlayer = v or ""
-            SaveCapriConfig()
-        end,
-    })
-    uiControls.SelectedAimPlayer = aimPlayerDrop
-
-    Tabs.Player:Button({
-        Title = "Làm mới player",
-        Callback = function()
-            local lst = getPlayerList()
-            if aimPlayerDrop and aimPlayerDrop.Refresh then
-                pcall(function() aimPlayerDrop:Refresh(lst, true) end)
-            end
-            notifyCapri("Player", "Đã quét lại danh sách người chơi (" .. tostring(#lst) .. ")", 2)
-        end,
-    })
-
-    uiControls.AimSelectedPlayer_Active = Tabs.Player:Toggle({
-        Title = "Aim player",
-        Value = _G.AimSelectedPlayer_Active,
-        Callback = Bind("AimSelectedPlayer_Active", function(v)
-            if v and (_G.SelectedAimPlayer or "") == "" then
-                _G.AimSelectedPlayer_Active = false
-                setUI("AimSelectedPlayer_Active", false)
-                notifyCapri("Aim player", "Hãy chọn player trước!", 2)
-            end
-            _G.Aim_Active = isAnyPlayerAimEnabled()
-            setUI("Aim_Active", _G.Aim_Active)
-            refreshFloatingVisibility()
+    uiControls.VoidFruitM1 = Tabs.PvP:Toggle({
+        Title = "Đánh trái ác quỷ hư không (Void M1)",
+        Value = _G.VoidFruitM1,
+        Callback = Bind("VoidFruitM1", function(vatt)
+            SetVoidFruitM1Enabled(vatt)
         end),
     })
-
-    uiControls.AimMode = Tabs.Player:Dropdown({
-        Title = "Chế độ aim",
-        Values = { "Gần nhất", "Tự aim" },
-        Value = (_G.AimMode == "Tự aim") and "Tự aim" or "Gần nhất",
-        Callback = Bind("AimMode", function(v)
-            _G.AimMode = (v == "Tự aim") and "Tự aim" or "Gần nhất"
-        end),
-    })
-
-    uiControls.SilentAim_Player = Tabs.Player:Toggle({
+    if _G.VoidFruitM1 then
+        SetVoidFruitM1Enabled(true)
+    end
+    uiControls.CamLock_Player = Tabs.PvP:Toggle({ Title = "Khóa camera người chơi", Value = _G.CamLock_Player, Callback = Bind("CamLock_Player", function(v) CamBtn.Visible = v or _G.CamLock_Active end) })
+    uiControls.SilentAim_Player = Tabs.PvP:Toggle({
         Title = "Aim ẩn người chơi",
         Value = _G.SilentAim_Player,
         Callback = Bind("SilentAim_Player", function(v)
-            _G.Aim_Active = isAnyPlayerAimEnabled()
-            setUI("Aim_Active", _G.Aim_Active)
-            refreshFloatingVisibility()
+            _G.Aim_Active = v
+            setUI("Aim_Active", v)
+            AimBtn.Visible = v or _G.Aim_Active
+            AimBtn.BackgroundColor3 = v and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(40, 40, 40)
+            AimBtn.BackgroundTransparency = v and 0.2 or 0.5
         end),
     })
-
-    uiControls.CamLock_Player = Tabs.Player:Toggle({
-        Title = "Khóa camera người chơi",
-        Value = _G.CamLock_Player,
-        Callback = Bind("CamLock_Player", function(v)
-            CamBtn.Visible = v or _G.CamLock_Active
-        end),
-    })
-
-    local AimSettingSec = Tabs.Player:Section({ Title = "Setting aim" })
-
-    uiControls.SilentAimPlayerRange = AimSettingSec:Slider({
+    uiControls.SilentAimPlayerRange = Tabs.PvP:Slider({
         Title = "Tầm xa Aim mục tiêu",
         Step = 1,
         Value = {
@@ -1118,34 +1072,12 @@ do
             _G.SilentAimPlayerRange = math.clamp(tonumber(v) or 0, 0, 1000)
         end),
     })
+    uiControls.Jump_Active = Tabs.PvP:Toggle({ Title = "Nút nhảy cao", Value = _G.Jump_Active, Callback = Bind("Jump_Active", function(v) JumpBtn.Visible = v end) })
+    uiControls.V4_Active = Tabs.PvP:Toggle({ Title = "Nút bật V4", Value = _G.V4_Active, Callback = Bind("V4_Active", function(v) V4Btn.Visible = v end) })
+    uiControls.SuperDash_Active = Tabs.PvP:Toggle({ Title = "Nút lướt siêu xa", Value = _G.SuperDash_Active, Callback = Bind("SuperDash_Active", function(v) DashBtn.Visible = v end) })
 
-    uiControls.Smoothness = AimSettingSec:Slider({
-        Title = "Độ mượt khóa camera",
-        Step = 0.01,
-        Value = {
-            Min = 0.01,
-            Max = 1,
-            Default = math.clamp(tonumber(_G.Smoothness) or 0.15, 0.01, 1),
-        },
-        Callback = Bind("Smoothness", function(v)
-            _G.Smoothness = math.clamp(tonumber(v) or 0.15, 0.01, 1)
-        end),
-    })
-
-    uiControls.PredictionStrength = AimSettingSec:Slider({
-        Title = "Lực dự đoán (Prediction)",
-        Step = 0.005,
-        Value = {
-            Min = 0,
-            Max = 0.5,
-            Default = math.clamp(tonumber(_G.PredictionStrength) or 0.165, 0, 0.5),
-        },
-        Callback = Bind("PredictionStrength", function(v)
-            _G.PredictionStrength = math.clamp(tonumber(v) or 0.165, 0, 0.5)
-        end),
-    })
-
-    uiControls.AimbotMode = AimSettingSec:Dropdown({
+    local AimSec = Tabs.PvP:Section({ Title = "Cài đặt Aimbot" })
+    uiControls.AimbotMode = AimSec:Dropdown({
         Title = "Chế độ Aimbot",
         Values = { "Zone", "360°" },
         Value = (_G.AimbotMode == "360°" or _G.Aim360) and "360°" or "Zone",
@@ -1153,8 +1085,7 @@ do
             applyAimbotMode(v)
         end),
     })
-
-    uiControls.AimbotRadius = AimSettingSec:Slider({
+    uiControls.AimbotRadius = AimSec:Slider({
         Title = "Bán kính vòng tròn (Zone)",
         Step = 1,
         Value = {
@@ -1177,6 +1108,13 @@ uiControls.KA = Tabs.Super:Toggle({ Title = "Kill Aura", Value = _G.KA, Callback
 uiControls.SuperHB = Tabs.Super:Toggle({ Title = "Hitbox xe tải", Value = _G.SuperHB, Callback = Bind("SuperHB") })
 uiControls.SilentAim_NPC = Tabs.Super:Toggle({ Title = "Aim ẩn NPC / Quái", Value = _G.SilentAim_NPC, Callback = Bind("SilentAim_NPC") })
 uiControls.FastAttack = Tabs.Super:Toggle({ Title = "Đánh nhanh (CommF)", Value = _G.FastAttack, Callback = Bind("FastAttack") })
+uiControls.Aim360 = Tabs.Super:Toggle({
+    Title = "Aim 360°",
+    Value = is360Mode(),
+    Callback = Bind("Aim360", function(v)
+        applyAimbotMode(v and "360°" or "Zone")
+    end),
+})
 
 uiControls.ESP = Tabs.Utility:Toggle({ Title = "ESP + Khoảng cách", Value = _G.ESP, Callback = Bind("ESP") })
 uiControls.LockButtons = Tabs.Utility:Toggle({ Title = "Khóa vị trí nút nổi", Value = _G.LockButtons, Callback = Bind("LockButtons") })
@@ -1193,14 +1131,43 @@ uiControls.Aim_Active = Tabs.Utility:Toggle({
     Title = "Dùng nút Aim nổi",
     Value = _G.Aim_Active,
     Callback = Bind("Aim_Active", function(v)
-        local aimOn = isAnyPlayerAimEnabled()
-        AimBtn.Visible = v or aimOn
-        if not v then
-            _G.SilentAim_Player = false
-            _G.AimSelectedPlayer_Active = false
-            setUI("SilentAim_Player", false)
-            setUI("AimSelectedPlayer_Active", false)
-            refreshFloatingVisibility()
+        AimBtn.Visible = v or _G.SilentAim_Player
+        if not v then _G.SilentAim_Player = false; setUI("SilentAim_Player", false) end
+    end),
+})
+uiControls.NormalZone_Active = Tabs.Utility:Toggle({
+    Title = "Vùng thường (Normal Zone)",
+    Value = _G.NormalZone_Active,
+    Callback = Bind("NormalZone_Active", function(v)
+        if v then
+            applyAimbotMode("Zone")
+        elseif not _G.SuperZone_Active and not is360Mode() then
+            _G.NormalZone_Active = true
+            setUI("NormalZone_Active", true)
+        end
+    end),
+})
+uiControls.SuperZone_Active = Tabs.Utility:Toggle({
+    Title = "Vùng siêu rộng (Super Zone)",
+    Value = _G.SuperZone_Active,
+    Callback = Bind("SuperZone_Active", function(v)
+        if v then
+            _G.SuperZone_Active = true
+            _G.NormalZone_Active = false
+            _G.Aim360 = false
+            _G.AimbotMode = "Zone"
+            _G.AimbotRadius = 500
+            _G.FOV = 500
+            setUI("AimbotMode", "Zone")
+            setUI("Aim360", false)
+            setUI("NormalZone_Active", false)
+            setUI("AimbotRadius", 500)
+            ZoneDragButton.Visible = _G.ShowZone
+            SaveCapriConfig()
+        else
+            _G.SuperZone_Active = false
+            setUI("SuperZone_Active", false)
+            SaveCapriConfig()
         end
     end),
 })
@@ -1917,6 +1884,7 @@ do
         Callback = function()
             LoadCapriConfig()
             refreshFloatingVisibility()
+            if _G.VoidFruitM1 then SetVoidFruitM1Enabled(true) else SetVoidFruitM1Enabled(false) end
             notifyCapri("Capri Hub", "Đã tải lại cấu hình!", 2)
         end,
     })
@@ -1953,20 +1921,6 @@ pcall(function()
     getgenv().CapriSilentAimDot = SilentAimDot
 end)
 
-local function getSelectedPlayerTargetPart(myRoot, maxRange)
-    local targetName = _G.SelectedAimPlayer or ""
-    if targetName == "" then return nil end
-    local plr = Players:FindFirstChild(targetName)
-    if not plr or plr == LocalPlayer or not plr.Character then return nil end
-    local hPart = plr.Character:FindFirstChild("HumanoidRootPart")
-    local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-    if not hPart or not hum or hum.Health <= 0 then return nil end
-    if myRoot and (hPart.Position - myRoot.Position).Magnitude > maxRange then
-        return nil
-    end
-    return hPart
-end
-
 task.spawn(function()
     while task.wait(0.05) do
         local circleRadius = getCircleRadius()
@@ -1976,49 +1930,35 @@ task.spawn(function()
         local best, shortest = nil, use360 and (_G.MaxDist or 700) or circleRadius
         local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if root then
+            local candidates = {}
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character then table.insert(candidates, p.Character) end
+            end
+            if Workspace:FindFirstChild("Enemies") then
+                for _, e in ipairs(Workspace.Enemies:GetChildren()) do table.insert(candidates, e) end
+            end
+            local zoneCenter = _G.ShowZone
+                and Vector2.new(ZoneDragButton.AbsolutePosition.X + ZoneDragButton.AbsoluteSize.X / 2, ZoneDragButton.AbsolutePosition.Y + ZoneDragButton.AbsoluteSize.Y / 2)
+                or Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
             local playerAimRange = math.clamp(tonumber(_G.SilentAimPlayerRange) or 700, 0, 1000)
 
-            -- Chế độ Aim Player chỉ định: chỉ aim đúng người chơi được chọn, không aim người khác trừ khi rời phạm vi aim
-            if _G.AimSelectedPlayer_Active then
-                best = getSelectedPlayerTargetPart(root, playerAimRange)
-            else
-                local candidates = {}
-                for _, p in ipairs(Players:GetPlayers()) do
-                    if p ~= LocalPlayer and p.Character then table.insert(candidates, p.Character) end
-                end
-                if Workspace:FindFirstChild("Enemies") then
-                    for _, e in ipairs(Workspace.Enemies:GetChildren()) do table.insert(candidates, e) end
-                end
-                local zoneCenter = _G.ShowZone
-                    and Vector2.new(ZoneDragButton.AbsolutePosition.X + ZoneDragButton.AbsoluteSize.X / 2, ZoneDragButton.AbsolutePosition.Y + ZoneDragButton.AbsoluteSize.Y / 2)
-                    or Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-
-                local preferNearest = (_G.AimMode ~= "Tự aim")
-                if preferNearest then
-                    shortest = math.huge
-                end
-
-                for _, char in ipairs(candidates) do
-                    local hPart = char:FindFirstChild("HumanoidRootPart")
-                    local hum = char:FindFirstChildOfClass("Humanoid")
-                    if hPart and hum and hum.Health > 0 then
-                        local mag = (hPart.Position - root.Position).Magnitude
-                        local isNPC = Players:GetPlayerFromCharacter(char) == nil
-                        local allowedDist = isNPC and (_G.MaxDist or 700) or playerAimRange
-                        if mag <= allowedDist then
-                            if (isNPC and _G.SilentAim_NPC) or (not isNPC and (_G.SilentAim_Player or _G.CamLock_Player)) then
-                                if preferNearest then
-                                    if mag < shortest then
-                                        shortest, best = mag, hPart
-                                    end
-                                elseif use360 then
-                                    if mag < shortest then shortest, best = mag, hPart end
-                                else
-                                    local sp, vis = Camera:WorldToViewportPoint(hPart.Position)
-                                    if vis then
-                                        local sd = (Vector2.new(sp.X, sp.Y) - zoneCenter).Magnitude
-                                        if sd <= circleRadius and sd < shortest then shortest, best = sd, hPart end
-                                    end
+            for _, char in ipairs(candidates) do
+                local hPart = char:FindFirstChild("HumanoidRootPart")
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hPart and hum and hum.Health > 0 then
+                    local mag = (hPart.Position - root.Position).Magnitude
+                    local isNPC = Players:GetPlayerFromCharacter(char) == nil
+                    local allowedDist = isNPC and (_G.MaxDist or 700) or playerAimRange
+                    if mag <= allowedDist then
+                        if (isNPC and _G.SilentAim_NPC) or (not isNPC and (_G.SilentAim_Player or _G.CamLock_Player)) then
+                            if use360 then
+                                if mag < shortest then shortest, best = mag, hPart end
+                            else
+                                local sp, vis = Camera:WorldToViewportPoint(hPart.Position)
+                                if vis then
+                                    local sd = (Vector2.new(sp.X, sp.Y) - zoneCenter).Magnitude
+                                    if sd <= circleRadius and sd < shortest then shortest, best = sd, hPart end
                                 end
                             end
                         end
@@ -2046,7 +1986,7 @@ if typeof(hookmetamethod) == "function" and typeof(getnamecallmethod) == "functi
             local args = { ... }
             if not checkcaller() and (method == "FireServer" or method == "InvokeServer") then
                 local target = getgenv().Capri and getgenv().Capri.CurrentTarget
-                if target and (isAnyPlayerAimEnabled() or _G.SilentAim_NPC) then
+                if target and (_G.SilentAim_Player or _G.SilentAim_NPC) then
                     local pred = target.Position + ((target.AssemblyLinearVelocity or target.Velocity or Vector3.zero) * (_G.PredictionStrength or 0.165))
                     for i, v in ipairs(args) do
                         if typeof(v) == "Vector3" then args[i] = pred
@@ -2074,7 +2014,6 @@ RunService.RenderStepped:Connect(function()
 
     local use360 = is360Mode()
     local circleRadius = getCircleRadius()
-    local aimOn = isAnyPlayerAimEnabled()
 
     local center = _G.ShowZone
         and Vector2.new(ZoneDragButton.AbsolutePosition.X + ZoneDragButton.AbsoluteSize.X / 2, ZoneDragButton.AbsolutePosition.Y + ZoneDragButton.AbsoluteSize.Y / 2)
@@ -2082,15 +2021,15 @@ RunService.RenderStepped:Connect(function()
 
     if FOVCircle then
         pcall(function()
-            FOVCircle.Visible = ((_G.ShowZone or aimOn or _G.SilentAim_NPC) and not use360) == true
+            FOVCircle.Visible = ((_G.ShowZone or _G.SilentAim_Player or _G.SilentAim_NPC) and not use360) == true
             FOVCircle.Radius = circleRadius
             FOVCircle.Position = center
         end)
     end
 
     ZoneDragButton.Visible = _G.ShowZone and not use360
-    AimBtn.BackgroundColor3 = aimOn and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(40, 40, 40)
-    AimBtn.BackgroundTransparency = aimOn and 0.2 or 0.5
+    AimBtn.BackgroundColor3 = _G.SilentAim_Player and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(40, 40, 40)
+    AimBtn.BackgroundTransparency = _G.SilentAim_Player and 0.2 or 0.5
     CamBtn.BackgroundTransparency = getgenv().Capri.LockEnabled and 0.2 or 0.5
 
     local curTarget = getgenv().Capri.CurrentTarget
@@ -2099,7 +2038,7 @@ RunService.RenderStepped:Connect(function()
     end
 
     local shownLine = false
-    if aimOn and curTarget and curTarget.Parent then
+    if _G.SilentAim_Player and curTarget and curTarget.Parent then
         local mdl = curTarget:FindFirstAncestorOfClass("Model")
         local plr = mdl and Players:GetPlayerFromCharacter(mdl)
         local hum = mdl and mdl:FindFirstChildOfClass("Humanoid")
